@@ -25,9 +25,11 @@
                 "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron.cmd"
             },
             "args": [
-                ".",
-                "hot-reload"
-            ]
+                "."
+            ],
+            "env": {
+                "EASY_PC_HOT_RELOAD": "1"
+            },
         }
     ]
 }

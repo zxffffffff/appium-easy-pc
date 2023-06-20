@@ -1,8 +1,7 @@
 const { app, BrowserWindow } = require('electron')
+const srv_start_appium = require('./srv/srv_appium.js')
 const path = require('path')
-const argv = require('minimist')(process.argv.slice(2));
-
-console.log(argv)
+const { env } = require('process')
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -13,7 +12,7 @@ function createWindow() {
         }
     })
 
-    if (argv._.includes('hot-reload')) {
+    if (env.EASY_PC_HOT_RELOAD == "1") {
         win.loadURL("http://localhost:3000/")
     }
     else {
@@ -29,6 +28,15 @@ app.whenReady().then(() => {
             createWindow()
         }
     })
+
+    // Appium
+    srv_start_appium()
+        .then(result => {
+            console.log("appium start!");
+        })
+        .catch(error => {
+            console.log("appium start error!");
+        })
 })
 
 app.on('window-all-closed', () => {

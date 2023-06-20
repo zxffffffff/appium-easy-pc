@@ -6,14 +6,19 @@
 ```js
 npm install --global create-react-app
 create-react-app easy-pc
+cd .\easy-pc\
 ```
 
 - 添加 `electron` 到 `easy-pc`
 ```js
-cd .\easy-pc\
 npm install electron --save-dev
 npm install --save-dev @electron-forge/cli
 npx electron-forge import
 // 文件路径修改 package.json
 "homepage": ".",
+```
+
+- 添加 `appium`
+```js
+npm install appium@next
 ```
