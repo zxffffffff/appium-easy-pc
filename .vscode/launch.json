@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "easy-pc",
+            "type": "node",
+            "request": "launch",
+            "preLaunchTask": "npm: build",
+            "cwd": "${workspaceFolder}/easy-pc",
+            "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron.cmd"
+            },
+            "args": [
+                "."
+            ]
+        },
+        {
+            "name": "easy-pc(hot-reload)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/easy-pc",
+            "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron.cmd"
+            },
+            "args": [
+                ".",
+                "hot-reload"
+            ]
+        }
+    ]
+}
