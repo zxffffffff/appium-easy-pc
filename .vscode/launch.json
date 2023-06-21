@@ -13,7 +13,11 @@
             },
             "args": [
                 "."
-            ]
+            ],
+            "env": {
+                "EASY_PC_HOT_RELOAD": "0"
+            },
+            "outputCapture": "std"
         },
         {
             "name": "easy-pc(hot-reload)",
@@ -30,6 +34,7 @@
             "env": {
                 "EASY_PC_HOT_RELOAD": "1"
             },
+            "outputCapture": "std"
         }
     ]
 }

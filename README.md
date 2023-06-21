@@ -22,3 +22,8 @@ npx electron-forge import
 ```js
 npm install appium@next
 ```
+
+- 添加 `driver`
+```js
+appium driver install --source=local ../fake-driver
+```
