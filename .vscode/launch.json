@@ -1,39 +1,18 @@
 {
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "easy-pc",
             "type": "node",
             "request": "launch",
-            "preLaunchTask": "npm: build",
-            "cwd": "${workspaceFolder}/easy-pc",
-            "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron",
-            "windows": {
-                "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron.cmd"
-            },
-            "args": [
-                "."
+            "name": "Launch Program",
+            "skipFiles": [
+                "<node_internals>/**"
             ],
-            "env": {
-                "EASY_PC_HOT_RELOAD": "0"
-            },
-            "outputCapture": "std"
-        },
-        {
-            "name": "easy-pc(hot-reload)",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}/easy-pc",
-            "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron",
-            "windows": {
-                "runtimeExecutable": "${workspaceFolder}/easy-pc/node_modules/.bin/electron.cmd"
-            },
-            "args": [
-                "."
-            ],
-            "env": {
-                "EASY_PC_HOT_RELOAD": "1"
-            },
+            "program": "${workspaceFolder}\\index.js",
+            "args": [],
             "outputCapture": "std"
         }
     ]
