@@ -22,6 +22,7 @@
   "homepage": "https://github.com/zxffffffff/start-appium#readme",
   "dependencies": {
     "appium": "^2.0.0-rc.3",
-    "appium-fs-driver": "file:appium-fs-driver"
+    "appium-fs-driver": "file:appium-fs-driver",
+    "appium-pc-driver": "file:appium-pc-driver"
   }
 }
