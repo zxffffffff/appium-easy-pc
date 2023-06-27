@@ -20,6 +20,7 @@
 ```
 
 - `getPageSource` @returns The UI hierarchy in a platform-appropriate format (e.g., HTML for a web page)
+参考安卓字段
 ```xml
 <?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy index="0" class="hierarchy" rotation="0" width="1080" height="2029">
@@ -60,4 +61,12 @@
     </android.widget.FrameLayout>
   </android.widget.FrameLayout>
 </hierarchy>
+```
+
+- `findElOrEls` @returns A single element or list of elements
+定义字段 elementId
+```json
+{
+    "element-6066-11e4-a52e-4f735466cecf": "123"
+}
 ```

@@ -8,8 +8,19 @@ import log from './logger'
 const http = require('http');
 const bl = require('bl');
 
-async function httpGet(api) {
-  const url = "http://127.0.0.1:4724/" + api;
+async function httpGet(api, map_args) {
+  var args = "";
+  if (map_args) {
+    for (const [key, value] of map_args.entries()) {
+      if (args.length == 0) {
+        args += "?";
+      } else {
+        args += "&";
+      }
+      args += key + "=" + value;
+    }
+  }
+  const url = "http://127.0.0.1:4724/" + api + args;
   return new Promise((resolve, reject) => {
     http.get(url, response => {
       response.setEncoding('utf8');
@@ -40,7 +51,8 @@ class AppiumPCDriver extends BaseDriver {
     await super.deleteSession();
   }
 
-  async getScreenshot() { 
+  // 在 pc 端实现 http server
+  async getScreenshot() {
     const res = await httpGet('getScreenshot')
     log.info(`getScreenshot ` /*+ res*/);
     return res;
@@ -55,7 +67,6 @@ class AppiumPCDriver extends BaseDriver {
 
   async getPageSource() {
     //return `<files>\n${this.opts.appPath}</files>`
-    // 在 pc 端实现 http server
     const res = await httpGet('getPageSource')
     log.info(`getPageSource ` /*+ res*/);
     return res;
@@ -67,76 +78,19 @@ class AppiumPCDriver extends BaseDriver {
       throw new errors.NotYetImplementedError('Finding an element from another element not supported')
     }
 
-    log.info(`[PC-Driver] Running XPath query '${selector}' against the current source`)
-    const source = await this.getPageSource()
-    const xmlDom = new DOMParser().parseFromString(source)
-    const nodes = xpath.select(selector, xmlDom)
-
-    if (multiple) {
-      return nodes.map(this._xmlNodeToElement.bind(this))
-    }
-
-    if (nodes.length < 1) {
+    const res = await httpGet('findElOrEls', new Map([
+      ["strategy", strategy ?? ""],
+      ["selector", selector ?? ""],
+      ["multiple", multiple ?? ""],
+      ["context", context ?? ""]
+    ]));
+    log.info(`findElOrEls ` + res);
+    if (res.length < 1) {
       throw new errors.NoSuchElementError()
     }
-
-    return this._xmlNodeToElement(nodes[0])
+    const obj = JSON.parse(res);
+    return obj;
   }
-
-  _xmlNodeToElement(node) {
-    let filePath = null;
-    for (const attribute of Object.values(node.attributes)) {
-      if (attribute.name === 'path') {
-        filePath = attribute.value
-        break
-      }
-    }
-    if (!filePath) {
-      throw new Error(`Found element had no path attribute`)
-    }
-    const elementId = util.uuidV4()
-    this.elementCache[elementId] = filePath
-    return { [W3C_ELEMENT_KEY]: elementId }
-  }
-
-  async fileFromElement(elementId) {
-    const filePath = this.elementCache[elementId]
-
-    if (!filePath) {
-      throw new errors.NoSuchElementError()
-    }
-
-    if (!await fs.exists(filePath)) {
-      throw new errors.StaleElementReferenceError()
-    }
-
-    return filePath
-  }
-
-  async getText(elementId) {
-    const filePath = await this.fileFromElement(elementId)
-    return await fs.readFile(filePath, 'utf8')
-  }
-
-  async setValue(text, elementId) {
-    const filePath = await this.fileFromElement(elementId)
-    return await fs.appendFile(filePath, text)
-  }
-
-  async clear(elementId) {
-    const filePath = await this.fileFromElement(elementId)
-    return await fs.writeFile(filePath, '')
-  }
-
-  async execute(script, args) {
-    if (script === 'fs: delete') {
-      const filePath = await this.fileFromElement(args[0])
-      return await fs.unlink(filePath)
-    }
-
-    throw new Error(`Don't know how to run script '${script}'`)
-  }
-
 }
 
 export { AppiumPCDriver }
