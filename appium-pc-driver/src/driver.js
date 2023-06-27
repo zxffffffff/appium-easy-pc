@@ -91,6 +91,30 @@ class AppiumPCDriver extends BaseDriver {
     const obj = JSON.parse(res);
     return obj;
   }
+
+  async click(elementId) {
+    const res = await httpGet('click', new Map([["elementId", elementId ?? ""]]));
+    log.info(`click ` + res);
+  }
+  
+  async getText(elementId) {
+    const res = await httpGet('getText', new Map([["elementId", elementId ?? ""]]));
+    log.info(`getText ` + res);
+    return res;
+  }
+
+  async setValue(text, elementId) {
+    const res = await httpGet('setValue', new Map([
+      ["text", text ?? ""],
+      ["elementId", elementId ?? ""]
+    ]));
+    log.info(`setValue ` + res);
+  }
+
+  async clear(elementId) {
+    const res = await httpGet('clear', new Map([["elementId", elementId ?? ""]]));
+    log.info(`clear ` + res);
+  }
 }
 
 export { AppiumPCDriver }

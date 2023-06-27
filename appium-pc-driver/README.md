@@ -64,9 +64,21 @@
 ```
 
 - `findElOrEls` @returns A single element or list of elements
+参数
+```js
+strategy // xpath
+selector // /root/xxx/v_Main/caption/no-name[1]
+multiple // true or false
+context
+```
 定义字段 elementId
 ```json
 {
     "element-6066-11e4-a52e-4f735466cecf": "123"
 }
 ```
+
+- `click`
+- `getText`
+- `setValue`
+- `clear`
