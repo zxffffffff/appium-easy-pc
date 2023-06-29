@@ -22,8 +22,7 @@
     "automationName": "pc",
     "platformNames": [
       "Mac",
-      "Windows",
-      "Linux"
+      "Windows"
     ],
     "mainClass": "AppiumPCDriver"
   },

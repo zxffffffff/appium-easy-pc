@@ -16,7 +16,8 @@ void node2xml(std::stringstream& xml, std::shared_ptr<UINode> node, int deep = 0
         xml << "<" << node->info.name
             << " index=\"" << node->info.index
             << "\" class=\"" << node->info.s_class
-            << "\" rotation=\"0\" width=\"" << node->info.bounds.Width()
+            << "\" rotation=\"0"
+            << "\" width=\"" << node->info.bounds.Width()
             << "\" height=\"" << node->info.bounds.Height()
             << "\">\n";
 
@@ -97,7 +98,7 @@ std::string getWindowRect()
  */
 std::string findElOrEls(
     const std::string& strategy, // xpath
-    const std::string& selector, // /root/华盛通/v_Main/caption/no-name[1]
+    const std::string& selector, // /root/锟斤拷盛通/v_Main/caption/no-name[1]
     const std::string& multiple, // true or false
     const std::string& context
 ) {
@@ -190,7 +191,7 @@ std::string clear(const std::string& elementId)
     {
         mouseClick(x, y);
 
-        // 模拟按下 Ctrl+A Backspace
+        // 模锟解按锟斤拷 Ctrl+A Backspace
         keyBoardInput('A', true);
         keyBoardInput(VK_BACK, false);
 
