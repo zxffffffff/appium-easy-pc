@@ -15,6 +15,7 @@ npm install appium@next
 - 添加 `driver`
 ```js
 npm install ./appium-pc-driver
+npm install ./appium-mac2-driver
 ```
 
 # 流程记录
