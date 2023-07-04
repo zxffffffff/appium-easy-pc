@@ -10,6 +10,9 @@ import Swifter
 import Cocoa
 import AppKit
 
+let ROOT_NAME = "root"
+let W3C_ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
+
 func getVisibleWindow() -> [NSWindow] {
     let windows = NSApplication.shared.windows.filter { $0.isVisible && $0.isReleasedWhenClosed == false }
     return windows.sorted(by: { $0.windowNumber < $1.windowNumber })
@@ -200,7 +203,7 @@ func parseNodeRecursive(_ view: NSView) -> UINode {
 
 func getAllNodes() -> UINode {
     var top_node = UINode();
-    top_node.info.name = "root";
+    top_node.info.name = ROOT_NAME;
     
     let windows = getVisibleWindow();
     if (windows.isEmpty) {
@@ -290,7 +293,7 @@ func findNodes(_ path_name2: [String]) -> [String] {
         return [];
     }
     
-    if (path_name.first != "root") {
+    if (path_name.first != ROOT_NAME) {
         return [];
     }
     path_name.removeFirst();
@@ -533,7 +536,17 @@ func simulateBackspace() {
     }
 }
 
-let W3C_ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
+func map2jsonStr(_ obj: [String: Any]) -> String {
+    do {
+        let jsonData = try JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted)
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+            return (jsonString)
+        }
+    } catch {
+        return ("转换为 JSON 失败: \(error)")
+    }
+    return "";
+}
 
 func node2xml_recursive(_ node: UINode) -> XMLElement {
     // 创建子节点
@@ -567,18 +580,6 @@ func node2xml_recursive(_ node: UINode) -> XMLElement {
     }
     
     return element;
-}
-
-func map2jsonStr(_ obj: [String: Any]) -> String {
-    do {
-        let jsonData = try JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted)
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            return (jsonString)
-        }
-    } catch {
-        return ("转换为 JSON 失败: \(error)")
-    }
-    return "";
 }
 
 func node2xml(_ node: UINode) -> String {
