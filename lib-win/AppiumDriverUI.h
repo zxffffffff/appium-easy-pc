@@ -1,615 +1,824 @@
-#pragma once
-#include "pch.h"
-#include <sstream>
-#include <cassert>
-using namespace std;
-#include <Windows.h>
-#include <wingdi.h>
-#include <gdiplus.h>
-using namespace Gdiplus;
-#pragma comment (lib,"Gdiplus.lib")
+//
+//  AppiumDriver.swift
+//  mac-appium-driver
+//
+//  Created by 朱晓枫 on 2023/6/28.
+//
 
-#define ROOT_NAME "root"
+import Foundation
+import Swifter
+import Cocoa
+import AppKit
 
-
-SHostWnd* GetHostWnd(HWND hWnd)
-{
-    DWORD  dwChild = ::SendMessage(hWnd, SPYMSG_SWNDENUM, 0, GSW_FIRSTCHILD);
-    SWindow* pChild = SWindowMgr::GetWindow((SWND)dwChild);
-    SHostWnd* pHost = pChild ? (SHostWnd*)pChild->GetContainer() : nullptr;
-    return pHost;
-}
-
-std::string GetHostName(HWND hWnd)
-{
-    wchar_t buf[256];
-    ::GetWindowTextW(hWnd, buf, sizeof(buf));
-    std::string name = XXToF8(buf);
-    if (name == "")
-        name = "no-name";
-    return name;
-}
-
-std::string GetName(SWindow* pWnd)
-{
-    if (XString(pWnd->GetObjectClass()) == L"hostwnd")
-    {
-        return GetHostName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
-    }
-
-    std::string name = XXToF8(pWnd->GetName());
-    if (name == "")
-        name = "no-name";
-    return name;
-}
-
-std::string GetElementId(SWindow* pWnd)
-{
-    if (XString(pWnd->GetObjectClass()) == L"hostwnd")
-    {
-        return "[hwnd]" + std::to_string(uint64_t(static_cast<SHostWnd*>(pWnd)->m_hWnd));
-    }
-    return "[swnd]" + std::to_string(uint64_t(pWnd->GetSwnd()));
-}
-
-SWindow* GetWndByElementId(const std::string& elementId)
-{
-    if (elementId.empty())
-        return nullptr;
-
-    auto type = elementId.substr(0, 6);
-    auto iwnd = std::stoull(elementId.substr(6));
-    if (type == "[hwnd]")
-    {
-        return GetHostWnd(HWND(iwnd));
-    }
-    else if (type == "[swnd]")
-    {
-        return SWindowMgr::GetWindow(SWND(iwnd));
-    }
-
-    return nullptr;
-}
-
-std::vector<HWND> GetAllWnds()
-{
-    //auto EnumWindowsProc = [](HWND hwnd, LPARAM lParam) {
-    //    std::vector<HWND>& allWnds = *reinterpret_cast<std::vector<HWND>*>(lParam);
-    //    allWnds.push_back(hwnd);
-    //    return TRUE;
-    //};
-    //std::vector<HWND> allWnds;
-    //EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&allWnds));
-
-    // 过滤
-    auto allWnds = SApplication::getSingleton().GetPopWnds();
-    auto ite = allWnds.begin();
-    while (ite != allWnds.end())
-    {
-        SHostWnd* pHost = GetHostWnd(*ite);
-        if (pHost && pHost->IsWindowVisible())
-            ++ite;
-        else
-            ite = allWnds.erase(ite);
-    }
-
-    // 排序 z-order
-    std::vector<HWND> sortedWnds;
-    HWND currentWnd = GetTopWindow(NULL);
-    while (currentWnd != NULL) {
-        sortedWnds.push_back(currentWnd);
-        currentWnd = GetNextWindow(currentWnd, GW_HWNDNEXT);
-    }
-
-    std::sort(allWnds.begin(), allWnds.end(), [&](HWND a, HWND b) {
-        auto aPos = std::find(sortedWnds.begin(), sortedWnds.end(), a);
-        auto bPos = std::find(sortedWnds.begin(), sortedWnds.end(), b);
-        return aPos > bPos;
-    });
-
-    assert(!allWnds.empty());
-    return allWnds;
+func getVisibleWindow() -> [NSWindow] {
+    let windows = NSApplication.shared.windows.filter { $0.isVisible && $0.isReleasedWhenClosed == false }
+    return windows.sorted(by: { $0.windowNumber < $1.windowNumber })
 }
 
 struct UIInfo
 {
-    std::string elementId; // m_hWnd or swnd;
-    std::string name;
-    int index = 0;
-    std::string package; // package="com.android.settings"
-    std::string s_class; // class="android.widget.FrameLayout"
-    std::string text;
-    std::string textRaw;
-    std::string resource_id; //[可选] resource-id="com.android.settings:id/main_content"
-    bool checkable = false;
-    bool checked = false;
-    bool clickable = false;
-    bool enabled = false;
-    bool focusable = false;
-    bool focused = false;
-    bool password = false;
-    bool scrollable = false;
-    bool selected = false;
-    CRect bounds; // bounds="[30,440][1050,602]" l,t,r,b
-    bool displayed = false;
-    std::string hint; //[可选] hint="Enter name"
+    var elementId: String = ""; // m_hWnd or swnd;
+    var name: String = "";
+    var index: Int = 0;
+    //var package: String = ""; // package="com.android.settings"
+    var s_class: String = ""; // class="android.widget.FrameLayout"
+    var text: String = "";
+    //var textRaw: String = "";
+    //var resource_id: String = ""; //[可选] resource-id="com.android.settings:id/main_content"
+    //var checkable: Bool = false;
+    //var checked: Bool = false;
+    //var clickable: Bool = false;
+    //var enabled: Bool = false;
+    //var focusable: Bool = false;
+    var focused: Bool = false;
+    //var password: Bool = false;
+    //var scrollable: Bool = false;
+    //var selected: Bool = false;
+    var x: CGFloat = 0.0;
+    var y: CGFloat = 0.0;
+    var width: CGFloat = 0.0;
+    var height: CGFloat = 0.0;
+    var displayed: Bool = false;
+    //var hint: String = ""; //[可选] hint="Enter name"
 };
 
 struct UINode
 {
-    UIInfo info;
-    std::vector<std::shared_ptr<UINode>> children;
+    var info: UIInfo = UIInfo();
+    var children: [UINode] = [];
 };
 
-UIInfo ParseNodeInfo(SWindow* pWnd, CPoint offset = CPoint(), int index = 0, const std::string& package = "")
-{
-    UIInfo info;
+func sanitizeTagName(_ tagName: String) -> String {
+    let illegalCharacterSet = CharacterSet(charactersIn: ":").union(CharacterSet.whitespacesAndNewlines)
+    let replacementCharacter = "_"
 
-    info.elementId = GetElementId(pWnd);
-    info.name = GetName(pWnd);
-    info.index = index;
-    info.package = package;
-    info.s_class = XXToF8(pWnd->GetObjectClass());
-    info.text = XXToF8(pWnd->GetWindowText(FALSE));
-    info.textRaw = XXToF8(pWnd->GetWindowText(TRUE));
-    info.resource_id = XXToF8(pWnd->GetAttribute(L"skin"));
-    //info.checkable
-    info.checked = pWnd->GetState() & WndState_Check;
-    //info.clickable
-    info.enabled = pWnd->IsEnable();
-    info.focusable = pWnd->IsFocusable();
-    info.focused = pWnd->IsFocused();
-    //info.password
-    //info.scrollable
-    //info.selected
-    info.bounds = CRect(offset + pWnd->GetClientRect().TopLeft(), pWnd->GetClientRect().Size());
-    info.displayed = pWnd->IsVisible(TRUE);
-    info.hint = XXToF8(pWnd->GetToolTipText());
+    var sanitizedTagName = tagName
 
-    assert(!info.elementId.empty());
-    assert(!info.name.empty());
-    assert(!info.s_class.empty());
+    // Replace illegal characters with underscore
+    sanitizedTagName = sanitizedTagName.components(separatedBy: illegalCharacterSet).joined(separator: replacementCharacter)
 
+    // Replace multiple underscores with a single underscore
+    while sanitizedTagName.contains("__") {
+        sanitizedTagName = sanitizedTagName.replacingOccurrences(of: "__", with: "_")
+    }
+
+    // Trim leading and trailing underscores
+    sanitizedTagName = sanitizedTagName.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+
+    return sanitizedTagName
+}
+
+func getWindowViewName(_ obj: Any) -> String {
+    var name = "";
+    if let window = obj as? NSWindow {
+        let id :String = window.identifier?.rawValue ?? "";
+        name = "\(window.className)_\(window.title)_\(id)";
+    } else if let view = obj as? NSView {
+        let id :String = view.identifier?.rawValue ?? "";
+        name = "\(view.className)_\(view.tag)_\(id)";
+    }
+    return sanitizeTagName(name);
+}
+
+func getWindowViewText(_ obj: Any) -> String {
+    if let window = obj as? NSWindow {
+        return window.title
+    } else if let label = obj as? NSTextField {
+        return label.stringValue
+    } else if let button = obj as? NSButton {
+        return button.title
+    } else if let textField = obj as? NSTextField {
+        return textField.stringValue
+    } else {
+        let mirror = Mirror(reflecting: obj)
+        for child in mirror.children {
+            if child.label == "stringValue" {
+                if let textValue = child.value as? String {
+                    return textValue
+                }
+            }
+        }
+    }
+    return ""
+}
+
+func getWindowViewEleId(_ obj: Any) -> String {
+    if let window = obj as? NSWindow {
+        let id :String = window.identifier?.rawValue ?? "";
+        return "[window]_[\(window.hash)]_[\(id)]"
+    } else if let view = obj as? NSView {
+        let id :String = view.identifier?.rawValue ?? "";
+        return "[view]_[\(view.hash)]_[\(id)]_[\(view.tag)]"
+    }
+    return "";
+}
+
+func getWindowViewRect(_ obj: Any) -> CGRect {
+    if let window = obj as? NSWindow {
+        guard let screen = window.screen else {
+            return CGRect();
+        }
+        return CGRect(
+            x: window.frame.origin.x,
+            y: screen.frame.height - (window.frame.origin.y + window.frame.height),
+            width: window.frame.width,
+            height:window.frame.height
+        );
+    } else if let view = obj as? NSView {
+        guard let window = view.window else {
+            return CGRect();
+        }
+        let viewFrame = view.convert(view.bounds, to: window.contentView);
+        return CGRect(
+            x: viewFrame.origin.x,
+            y: window.frame.height - (viewFrame.origin.y + viewFrame.height),
+            width: viewFrame.width,
+            height: viewFrame.height
+        );
+    }
+    return CGRect();
+}
+
+func parseNodeInfo(_ window: NSWindow, index: Int) -> UIInfo {
+    let rect = getWindowViewRect(window)
+    let info = UIInfo(
+        elementId: getWindowViewEleId(window),
+        name: getWindowViewName(window),
+        index: index,
+        s_class: window.className,
+        text: getWindowViewText(window),
+        focused: window.isKeyWindow,
+        x: 0, //rect.origin.x,
+        y: 0, //rect.origin.y,
+        width: rect.width,
+        height: rect.height,
+        displayed: window.isVisible
+    );
+    //print("ParseNodeInfo info=\(info)")
     return info;
 }
 
-std::shared_ptr<UINode> ParseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
-{
-    std::shared_ptr<UINode> node = std::make_shared<UINode>();
+func parseNodeInfo(_ view: NSView, index: Int) -> UIInfo {
+    let rect = getWindowViewRect(view)
+    let info = UIInfo(
+        elementId: getWindowViewEleId(view),
+        name: getWindowViewName(view),
+        index: index,
+        s_class: view.className,
+        text: getWindowViewText(view),
+        x: rect.origin.x,
+        y: rect.origin.y,
+        width: rect.width,
+        height: rect.height,
+        displayed: !view.isHidden
+    );
+    //print("ParseNodeInfo info=\(info)")
+    return info;
+}
 
-    node->info = ParseNodeInfo(pWnd, offset, index);
-
-    SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
-    while (pChild)
-    {
-        // 控件隐藏则不递归查找，提高速度
-        if (pChild->IsVisible(TRUE))
-        {
-            node->children.push_back(ParseNodeRecursive(pChild, offset, node->children.size()));
-        }
-        pChild = pChild->GetWindow(GSW_NEXTSIBLING);
+func parseNodeRecursive(_ window: NSWindow, index: Int) -> UINode {
+    var node = UINode();
+    
+    node.info = parseNodeInfo(window, index: index);
+    
+    for view in window.contentView?.subviews ?? [] {
+        node.children.append(parseNodeRecursive(view, index: node.children.count));
     }
     
     return node;
 }
 
-std::shared_ptr<UINode> GetAllNodes()
-{
-    std::shared_ptr<UINode> top_node = std::make_shared<UINode>();
-
-    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
-    if (!hMainWnd)
-        return top_node;
-
-    vector<HWND> allWnds = GetAllWnds();
-    if (allWnds.empty())
-        return top_node;
-
-    SHostWnd* pHostMain = GetHostWnd(hMainWnd);
-    if (!pHostMain)
-        return top_node;
-    std::string nameMain = GetHostName(hMainWnd);
-
-    CRect realScreenRect = XXWindowHelper::GetTotalScreen();
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
-    CPoint mainOffset = mainGeometry.TopLeft();
-    CRect screenRect = mainGeometry;
-
-    top_node->info = ParseNodeInfo(pHostMain);
-    top_node->info.name = ROOT_NAME;
-    for (int i = 0; i < allWnds.size(); i++)
-    {
-        SHostWnd* pHost = GetHostWnd(allWnds[i]);
-        std::string name = GetHostName(allWnds[i]);
-
-        if (!pHost) continue;
-        if (!pHost->IsWindowVisible()) continue;
-
-        CPoint screenOffset;
-        if (pHost != pHostMain)
-        {
-            ::ClientToScreen(pHost->m_hWnd, &screenOffset);
-            screenOffset.Offset(-mainOffset);
-        }
-
-        top_node->children.push_back(ParseNodeRecursive(pHost, screenOffset, top_node->children.size()));
+func parseNodeRecursive(_ view: NSView, index: Int) -> UINode {
+    var node = UINode();
+    
+    node.info = parseNodeInfo(view, index: index);
+    
+    for subview in view.subviews where !subview.isHidden {
+        node.children.append(parseNodeRecursive(subview, index: node.children.count));
     }
+    
+    return node;
+}
 
+func getAllNodes() -> UINode {
+    var top_node = UINode();
+    top_node.info.name = "root";
+    
+    let windows = getVisibleWindow();
+    if (windows.isEmpty) {
+        return top_node;
+    }
+    let window = windows[0];
+    
+    top_node.info.width = window.frame.width;
+    top_node.info.height = window.frame.height;
+    
+    for window in windows {
+        top_node.children.append(parseNodeRecursive(window, index: top_node.children.count));
+    }
+    
     return top_node;
 }
 
-std::vector<std::string> findNodesRecursive(
-    SWindow* pWnd,
-    std::vector<std::string> path_name,
-    std::map<std::string, int>& repeat_name
-) {
-    std::vector<std::string> v;
-
-    if (path_name.empty())
-        return v;
-
-    std::string name = GetName(pWnd);
-    std::string name2 = path_name.front();
-    auto mismatchIt = std::mismatch(name.begin(), name.end(), name2.begin(), name2.end());
-    if (mismatchIt.first == name.end())
-    {
+func findNodesRecursive(_ obj: Any, _ path_name2: [String], _ repeat_name: inout [String:Int]) -> [String] {
+    var v: [String] = [];
+    
+    var path_name = path_name2;
+    if (path_name.isEmpty) {
+        return [];
+    }
+    
+    let name = getWindowViewName(obj);
+    let name2 = path_name[0];
+    if (name2.hasPrefix(name)) {
         // 前缀匹配
-        std::string diff = name2.substr(mismatchIt.second - name2.begin());
-        if (diff.empty())
-        {
+        let commonPrefix = name.commonPrefix(with: name2)
+        var diff = name2.replacingOccurrences(of: commonPrefix, with: "", options: .literal, range: nil)
+        if (diff.isEmpty) {
             // 全部匹配
         }
-        else if (diff.front() == '[' && diff.back() == ']')
-        {
-            diff.erase(diff.begin());
-            diff.erase(diff.end() - 1);
-            int index = std::stoi(diff);
-            if (++repeat_name[name] != index)
-            {
+        else if (diff.first == "[" && diff.last == "]") {
+            diff.removeFirst()
+            diff.removeLast()
+            let index = Int(diff);
+            var repeat_index = repeat_name[name] ?? 0;
+            repeat_index += 1;
+            repeat_name[name] = repeat_index;
+            if (repeat_index != index) {
                 // 索引不匹配
-                return v;
+                return [];
             }
         }
-        else
-        {
+        else {
             // 后缀未匹配
-            return v;
+            return [];
         }
     }
-    else
-    {
+    else {
         // 未匹配
-        return v;
+        return [];
     }
-
-    path_name.erase(path_name.begin());
-    if (path_name.empty())
-    {
+    
+    path_name.removeFirst()
+    if (path_name.isEmpty) {
         // found
-        v.push_back(GetElementId(pWnd));
+        v.append(getWindowViewEleId(obj))
         return v;
     }
-
-    std::map<std::string, int> repeat_name2;
-    SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
-    while (pChild)
-    {
-        // 控件隐藏则不递归查找，提高速度
-        if (pChild->IsVisible(TRUE))
-        {
-            auto v2 = findNodesRecursive(pChild, path_name, repeat_name2);
-            v.insert(v.end(), v2.begin(), v2.end());
+    if let window = obj as? NSWindow {
+        var repeat_name2: [String:Int] = [:]
+        for view in window.contentView?.subviews ?? [] {
+            v.append(contentsOf: findNodesRecursive(view, path_name, &repeat_name2))
         }
-        pChild = pChild->GetWindow(GSW_NEXTSIBLING);
+    } else if let view = obj as? NSView {
+        var repeat_name2: [String:Int] = [:]
+        for subview in view.subviews where !subview.isHidden {
+            v.append(contentsOf: findNodesRecursive(subview, path_name, &repeat_name2))
+        }
     }
-
     return v;
 }
 
-std::vector<std::string> findNodes(std::vector<std::string> path_name)
-{
-    std::vector<std::string> v;
-
-    if (path_name.empty())
-        return v;
-
-    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
-    if (!hMainWnd)
-        return v;
-
-    vector<HWND> allWnds = GetAllWnds();
-    if (allWnds.empty())
-        return v;
-
-    SHostWnd* pHostMain = GetHostWnd(hMainWnd);
-    if (!pHostMain)
-        return v;
-
-    if (path_name.front() != ROOT_NAME)
-        return v;
-    path_name.erase(path_name.begin());
-
-    for (int i = 0; i < allWnds.size(); i++)
-    {
-        SHostWnd* pHost = GetHostWnd(allWnds[i]);
-
-        if (!pHost) continue;
-        if (!pHost->IsWindowVisible()) continue;
-
-        std::map<std::string, int> repeat_name;
-        auto v2 = (findNodesRecursive(pHost, path_name, repeat_name));
-        v.insert(v.end(), v2.begin(), v2.end());
+func findNodes(_ path_name2: [String]) -> [String] {
+    var v: [String] = [];
+    
+    var path_name = path_name2;
+    if (path_name.isEmpty) {
+        return [];
     }
-
+    
+    let windows = getVisibleWindow();
+    if (windows.isEmpty) {
+        return [];
+    }
+    
+    if (path_name.first != "root") {
+        return [];
+    }
+    path_name.removeFirst();
+    
+    var repeat_name2: [String:Int] = [:]
+    for window in windows {
+        v.append(contentsOf: findNodesRecursive(window, path_name, &repeat_name2))
+    }
+    
     return v;
 }
 
-
-CRect getMainGeometry()
-{
-    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
-    if (!hMainWnd)
-        return CRect();
-
-    SHostWnd* pHostMain = GetHostWnd(hMainWnd);
-    if (!pHostMain)
-        return CRect();
-
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
-    return mainGeometry;
-}
-
-int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
-{
-    UINT num = 0;           // 编码器数量
-    UINT size = 0;          // 编码器数组大小
-
-    ImageCodecInfo* pImageCodecInfo = NULL;
-
-    GetImageEncodersSize(&num, &size);
-    if (size == 0)
-        return -1;  // 失败
-
-    pImageCodecInfo = (ImageCodecInfo*)(malloc(size));
-    if (pImageCodecInfo == NULL)
-        return -1;  // 失败
-
-    GetImageEncoders(num, size, pImageCodecInfo);
-
-    for (UINT i = 0; i < num; ++i)
-    {
-        if (wcscmp(pImageCodecInfo[i].MimeType, format) == 0)
-        {
-            *pClsid = pImageCodecInfo[i].Clsid;
-            free(pImageCodecInfo);
-            return i;  // 成功
+func findNodeByEleId(_ view: NSView, _ elementId: String) -> NSView? {
+    if (getWindowViewEleId(view) == elementId) {
+        return view;
+    }
+    
+    for subview in view.subviews where !subview.isHidden {
+        if let ret_view = findNodeByEleId(subview, elementId) {
+            return ret_view;
         }
     }
-
-    free(pImageCodecInfo);
-    return -1;  // 失败
+    
+    return nil;
 }
 
-void SaveBitmapToMemory(Bitmap* bitmap, vector<BYTE>& memoryBuffer)
-{
-    CLSID pngClsid;
-    GetEncoderClsid(L"image/png", &pngClsid);
-
-    // 创建内存流
-    IStream* stream;
-    CreateStreamOnHGlobal(NULL, TRUE, &stream);
-
-    // 保存位图到内存流
-    bitmap->Save(stream, &pngClsid);
-
-    // 获取内存流大小
-    STATSTG stats;
-    stream->Stat(&stats, STATFLAG_DEFAULT);
-    ULONG streamSize = static_cast<ULONG>(stats.cbSize.QuadPart);
-
-    // 分配内存
-    memoryBuffer.resize(streamSize);
-
-    // 将内存流复制到内存缓冲区
-    LARGE_INTEGER zeroOffset;
-    zeroOffset.QuadPart = 0;
-    stream->Seek(zeroOffset, STREAM_SEEK_SET, NULL);
-    stream->Read(&memoryBuffer[0], streamSize, NULL);
-
-    // 释放内存流
-    stream->Release();
-}
-
-void ConvertMemoryToBase64(const vector<BYTE>& memoryBuffer, string& base64String)
-{
-    // Base64 编码
-    static constexpr char base64Chars[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz"
-        "0123456789+/";
-
-    stringstream ss;
-    int i = 0;
-    int j = 0;
-    BYTE a3[3];
-    BYTE a4[4];
-
-    for (BYTE byte : memoryBuffer)
-    {
-        a3[i++] = byte;
-
-        if (i == 3)
-        {
-            a4[0] = (a3[0] & 0xfc) >> 2;
-            a4[1] = ((a3[0] & 0x03) << 4) + ((a3[1] & 0xf0) >> 4);
-            a4[2] = ((a3[1] & 0x0f) << 2) + ((a3[2] & 0xc0) >> 6);
-            a4[3] = a3[2] & 0x3f;
-
-            for (int k = 0; k < 4; k++)
-                ss << base64Chars[a4[k]];
-
-            i = 0;
+func findNodeByEleId(_ elementId: String) -> Any? {
+    let windows = getVisibleWindow();
+    if (windows.isEmpty) {
+        return nil;
+    }
+    
+    for window in windows {
+        if (getWindowViewEleId(window) == elementId) {
+            return window;
+        }
+        
+        for view in window.contentView?.subviews ?? [] {
+            if let ret_view = findNodeByEleId(view, elementId) {
+                return ret_view;
+            }
         }
     }
+    
+    return nil;
+}
 
-    if (i != 0)
-    {
-        for (j = i; j < 3; j++)
-            a3[j] = 0;
+func getScreenshotBase64() -> String {
+    let windows = getVisibleWindow();
+    if (windows.isEmpty) {
+        return "";
+    }
+    let window = windows[0];
+    
+    var newY = 0.0
+    if let screen = window.screen {
+        newY = Double(screen.frame.height - (window.frame.height + window.frame.origin.y))
+    }
+    
+    let imageRect = NSRect(x:window.frame.origin.x, y:CGFloat(newY), width:window.frame.width, height:window.frame.height)
+    print("getScreenshotBase64 imageRect: \(imageRect)");
+    
+    if let cgImage = CGWindowListCreateImage(imageRect, .optionIncludingWindow, CGWindowID(window.windowNumber), .bestResolution) {
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+        let pngData = bitmapRep.representation(using: .png, properties: [:])
+        if let base64String = pngData?.base64EncodedString() {
+            
+            //if let imageData = Data(base64Encoded: base64String) {
+            //    let fileManager = FileManager.default
+            //    let temporaryDirectory = fileManager.temporaryDirectory
+            //
+            //    do {
+            //        let fileName = UUID().uuidString + ".png"
+            //        let fileURL = temporaryDirectory.appendingPathComponent(fileName)
+            //        try imageData.write(to: fileURL)
+            //        print(fileURL)
+            //    } catch {
+            //        print("Failed to save Base64 as PNG file: \(error)")
+            //        return ""
+            //    }
+            //}
+            
+            return base64String
+        }
+    }
+    
+    return ""
+}
 
-        a4[0] = (a3[0] & 0xfc) >> 2;
-        a4[1] = ((a3[0] & 0x03) << 4) + ((a3[1] & 0xf0) >> 4);
-        a4[2] = ((a3[1] & 0x0f) << 2) + ((a3[2] & 0xc0) >> 6);
+func getMainRect() -> CGRect {
+    let windows = getVisibleWindow();
+    if (windows.isEmpty) {
+        return CGRect();
+    }
+    let window = windows[0];
+    return CGRect(x: 0, y: 0, width: window.frame.width, height: window.frame.height)
+}
 
-        for (int k = 0; k < i + 1; k++)
-            ss << base64Chars[a4[k]];
-
-        while (i++ < 3)
-            ss << '=';
+class EventSender {
+    private var taskQueue: [EventTask] = []
+    private var timer: Timer?
+    
+    struct EventTask {
+        var events: [CGEvent] = []
     }
 
-    base64String = ss.str();
+    func addTaskToQueue(events: [CGEvent]) {
+        taskQueue.append(EventTask(events: events))
+        
+        // 如果定时器为空，则开始定时器
+        if timer == nil {
+            startTimer()
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(timerFired), userInfo: nil, repeats: true)
+    }
+    
+    @objc func timerFired() {
+        // 这里是定时器触发时要执行的代码
+        guard let task = taskQueue.first else {
+            // 事件队列为空，停止定时器
+            stopTimer()
+            return
+        }
+        
+        // 发送事件
+        for event in task.events{
+            event.post(tap: .cghidEventTap)
+        }
+        
+        // 从队列中移除已发送的事件
+        taskQueue.removeFirst()
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
 }
 
-std::string getScreenshotBase64()
-{
-    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
-    if (!hMainWnd)
-        return "";
-
-    SHostWnd* pHostMain = GetHostWnd(hMainWnd);
-    if (!pHostMain)
-        return "";
-
-    CRect realScreenRect = XXWindowHelper::GetTotalScreen();
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
-
-    int x = mainGeometry.left;
-    int y = mainGeometry.top;
-    int width = mainGeometry.Width();
-    int height = mainGeometry.Height();
-
-    // 获取屏幕设备上下文
-    HDC hScreenDC = GetDC(NULL);
-    HDC hCaptureDC = CreateCompatibleDC(hScreenDC);
-
-    // 创建位图
-    HBITMAP hCaptureBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
-    SelectObject(hCaptureDC, hCaptureBitmap);
-
-    // 复制屏幕指定范围到位图
-    BitBlt(hCaptureDC, 0, 0, width, height, hScreenDC, x, y, SRCCOPY);
-
-    // 保存位图到 GDI+ 的 Bitmap 对象
-    Bitmap* bitmap = Bitmap::FromHBITMAP(hCaptureBitmap, NULL);
-
-#ifdef _DEBUG
-    // 保存 Bitmap 对象到文件
-    CLSID pngClsid;
-    GetEncoderClsid(L"image/png", &pngClsid);
-    bitmap->Save(L"C:\\Users\\xiaofeng.zhu\\Desktop\\debug.png", &pngClsid, NULL);
-#endif
-
-    // 保存位图到内存
-    vector<BYTE> memoryBuffer;
-    SaveBitmapToMemory(bitmap, memoryBuffer);
-
-    // 将内存转换为 Base64 字符串
-    std::string base64String;
-    ConvertMemoryToBase64(memoryBuffer, base64String);
-
-    // 释放资源
-    DeleteObject(hCaptureBitmap);
-    DeleteDC(hCaptureDC);
-    ReleaseDC(NULL, hScreenDC);
-
-    // 释放 Bitmap 对象
-    delete bitmap;
-
-    return base64String;
-}
+let eventSender = EventSender()
 
 // 模拟鼠标点击
-void mouseClick(int x, int y, DWORD dwFlags = MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP)
-{
-    XString flag;
-    if (dwFlags & MOUSEEVENTF_LEFTDOWN)
-        flag += L"LD";
-    if (dwFlags & MOUSEEVENTF_RIGHTDOWN)
-        flag += L"RD";
-    if (dwFlags & MOUSEEVENTF_LEFTUP)
-        flag += L"LU";
-    if (dwFlags & MOUSEEVENTF_RIGHTUP)
-        flag += L"RU";
+func simulateMouseClick(_ view: NSView, dbClick: Bool = false) {
+    // 获取目标视图的中间坐标
+    let viewRect = getWindowViewRect(view)
+    let windowRect = getWindowViewRect(view.window)
+    let screenMidPoint = CGPoint(
+        x: viewRect.midX + windowRect.origin.x,
+        y: viewRect.midY + windowRect.origin.y
+    )
+    print("simulate MouseClick \(screenMidPoint)")
 
-    SetCursorPos(x, y);
-    mouse_event(dwFlags, x, y, 0, 0);
+    // 创建鼠标事件
+    var events: [CGEvent] = []
+    if let downEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: screenMidPoint, mouseButton: .left),
+       let upEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: screenMidPoint, mouseButton: .left){
+        events.append(downEvent)
+        events.append(upEvent)
+    }
+    if (dbClick) {
+        if let downEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: screenMidPoint, mouseButton: .left),
+           let upEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: screenMidPoint, mouseButton: .left){
+            events.append(downEvent)
+            events.append(upEvent)
+        }
+    }
+    eventSender.addTaskToQueue(events: events)
 }
 
-// 模拟键盘输入 Ctrl+A => KeyInput(VK_A, true);
-void keyBoardInput(WORD virtualKeyCode, bool isCtrlPressed)
-{
-    // 转换为扫描码
-    BYTE scanCode = MapVirtualKey(virtualKeyCode, MAPVK_VK_TO_VSC);
+// 模拟输入文字
+func simulateKeyboardInput(text: String) {
+    print("simulate text \(text)")
+    let eventSource = CGEventSource(stateID: .hidSystemState)
 
-    // 模拟按下
-    KEYBDINPUT kbDown = { 0 };
-    kbDown.wScan = scanCode;
-    kbDown.dwFlags = KEYEVENTF_SCANCODE;
-    if (isCtrlPressed) {
-        kbDown.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    for character in text {
+        let keyDown = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: false)
+
+        if let keyDown = keyDown, let keyUp = keyUp {
+            let characterString = String(character)
+            var keyCode: [UInt16] = []
+            characterString.unicodeScalars.forEach { scalar in
+                keyCode.append(UInt16(scalar.value))
+            }
+
+            keyDown.keyboardSetUnicodeString(stringLength: Int(keyCode.count), unicodeString: &keyCode)
+            keyUp.keyboardSetUnicodeString(stringLength: Int(keyCode.count), unicodeString: &keyCode)
+
+            // keyDown.post(tap: .cghidEventTap)
+            // keyUp.post(tap: .cghidEventTap)
+            eventSender.addTaskToQueue(events: [keyDown, keyUp])
+        }
     }
-
-    INPUT inputDown = { 0 };
-    inputDown.type = INPUT_KEYBOARD;
-    inputDown.ki = kbDown;
-
-    // 模拟释放
-    KEYBDINPUT kbUp = { 0 };
-    kbUp.wScan = scanCode;
-    kbUp.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-    if (isCtrlPressed) {
-        kbUp.dwFlags |= KEYEVENTF_EXTENDEDKEY;
-    }
-
-    INPUT inputUp = { 0 };
-    inputUp.type = INPUT_KEYBOARD;
-    inputUp.ki = kbUp;
-
-    // 发送输入事件
-    INPUT inputs[2] = { inputDown, inputUp };
-    SendInput(2, inputs, sizeof(INPUT));
 }
 
-// 模拟文字输入
-void textInput(const std::wstring& text)
-{
-    for (wchar_t ch : text)
-    {
-        // 转换为扫描码
-        WORD vk = VkKeyScan(ch);
-        BYTE scanCode = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+func simulateCommandA() {
+    print("simulate Command + A")
+    let eventSource = CGEventSource(stateID: .hidSystemState)
+    
+    let commandKeyDown = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x37, keyDown: true)
+    let commandKeyUp = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x37, keyDown: false)
+    
+    let aKeyDown = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x00, keyDown: true)
+    let aKeyUp = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x00, keyDown: false)
+    
+    commandKeyDown?.flags = .maskCommand
+    commandKeyUp?.flags = .maskCommand
+    
+    aKeyDown?.flags = .maskCommand
+    aKeyUp?.flags = .maskCommand
+    
+    if let commandKeyDown = commandKeyDown,
+       let commandKeyUp = commandKeyUp,
+       let aKeyDown = aKeyDown,
+       let aKeyUp = aKeyUp {
+        // commandKeyDown.post(tap: .cghidEventTap)
+        // aKeyDown.post(tap: .cghidEventTap)
+        // aKeyUp.post(tap: .cghidEventTap)
+        // commandKeyUp.post(tap: .cghidEventTap)
+        eventSender.addTaskToQueue(events: [commandKeyDown, aKeyDown, aKeyUp, commandKeyUp])
+    }
+}
 
-        // 模拟按下
-        KEYBDINPUT kbDown = { 0 };
-        kbDown.wScan = scanCode;
-        kbDown.dwFlags = KEYEVENTF_SCANCODE;
+func simulateBackspace() {
+    print("simulate Backspace")
+    let eventSource = CGEventSource(stateID: .hidSystemState)
+    
+    let backspaceKeyDown = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x33, keyDown: true)
+    let backspaceKeyUp = CGEvent(keyboardEventSource: eventSource, virtualKey: 0x33, keyDown: false)
+    
+    if let backspaceKeyDown = backspaceKeyDown, let backspaceKeyUp = backspaceKeyUp {
+        // backspaceKeyDown.post(tap: .cghidEventTap)
+        // backspaceKeyUp.post(tap: .cghidEventTap)
+        eventSender.addTaskToQueue(events: [backspaceKeyDown, backspaceKeyUp])
+    }
+}
 
-        INPUT inputDown = { 0 };
-        inputDown.type = INPUT_KEYBOARD;
-        inputDown.ki = kbDown;
+let W3C_ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
 
-        // 模拟释放
-        KEYBDINPUT kbUp = { 0 };
-        kbUp.wScan = scanCode;
-        kbUp.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+func node2xml_recursive(_ node: UINode) -> XMLElement {
+    // 创建子节点
+    let element = XMLElement(name: node.info.name)
+    element.setAttributesAs([
+        "index" : "\(node.info.index)",
+        "eleId" : node.info.elementId,
+        //"package" : node.info.package,
+        "class" : node.info.s_class,
+        "text" : node.info.text,
+        //"textRaw" : node.info.textRaw,
+        //"resource-id" : node.info.resource_id,
+        //"checkable" : "\(node.info.checkable)",
+        //"checked" : "\(node.info.checked)",
+        //"clickable" : "\(node.info.clickable)",
+        //"enabled" : "\(node.info.enabled)",
+        //"focusable" : "\(node.info.focusable)",
+        "focused" : "\(node.info.focused)",
+        //"password" : "\(node.info.password)",
+        //"scrollable" : "\(node.info.scrollable)",
+        //"selected" : "\(node.info.selected)",
+        "x" : "\(node.info.x)",
+        "y" : "\(node.info.y)",
+        "width" : "\(node.info.width)",
+        "height" : "\(node.info.height)",
+        "displayed" : "\(node.info.displayed)",
+    ])
+    
+    for child in node.children {
+        element.addChild(node2xml_recursive(child));
+    }
+    
+    return element;
+}
 
-        INPUT inputUp = { 0 };
-        inputUp.type = INPUT_KEYBOARD;
-        inputUp.ki = kbUp;
+func map2jsonStr(_ obj: [String: Any]) -> String {
+    do {
+        let jsonData = try JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted)
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+            return (jsonString)
+        }
+    } catch {
+        return ("转换为 JSON 失败: \(error)")
+    }
+    return "";
+}
 
-        // 发送输入事件
-        INPUT inputs[2] = { inputDown, inputUp };
-        SendInput(2, inputs, sizeof(INPUT));
+func node2xml(_ node: UINode) -> String {
+    // 创建XML对象
+    let xmlDoc = XMLDocument()
+
+    // 创建根节点
+    let rootElement = XMLElement(name: node.info.name)
+    rootElement.setAttributesAs([
+        "index" : "\(node.info.index)",
+        "class" : node.info.s_class,
+        "width" : "\(node.info.width)",
+        "height" : "\(node.info.height)"
+    ])
+    xmlDoc.setRootElement(rootElement)
+
+    for child in node.children {
+        rootElement.addChild(node2xml_recursive(child))
+    }
+    
+    if let xmlData = xmlDoc.xmlData(options: .nodePrettyPrint) as Data? {
+        // 执行操作
+        if let xmlString = String(data: xmlData, encoding: .utf8) {
+            return (xmlString)
+        } else {
+            return ("无法将XML数据转换为字符串")
+        }
+    } else {
+        return ("无法获取XML数据")
+    }
+}
+
+func getPageSource() -> String {
+    let node = getAllNodes();
+    let xml = node2xml(node);
+    return xml;
+}
+
+func getScreenshot() -> String {
+    return getScreenshotBase64();
+}
+
+func getWindowRect() -> String {
+    let rect = getMainRect();
+    let dic: [String: Any] = [
+        "x": 0,
+        "y": 0,
+        "width": rect.width,
+        "height": rect.height
+    ]
+    return map2jsonStr(dic)
+}
+
+func findElOrEls(_ strategy:String, _ selector:String, _ multiple:String, _ context:String) -> String {
+    if (strategy == "xpath") {
+        if (selector.isEmpty) {
+            return "";
+        }
+        
+        let multi = (multiple == "true");
+        let components = selector.components(separatedBy: "/").filter { !$0.isEmpty }
+        
+        let nodes = findNodes(components);
+        if (nodes.isEmpty) {
+            return "";
+        }
+        
+        if (multi) {
+            let dic: [String: Any] = [
+                W3C_ELEMENT_KEY : nodes
+            ]
+            return map2jsonStr(dic);
+        }
+        else {
+            let dic: [String: Any] = [
+                W3C_ELEMENT_KEY : nodes.first
+            ]
+            return map2jsonStr(dic);
+        }
+    }
+    return "";
+}
+
+func click(_ elementId:String) -> String {
+    if let obj = findNodeByEleId(elementId) {
+        if let window = obj as? NSWindow {
+            return "todo"
+        } else if let view = obj as? NSView {
+            simulateMouseClick(view)
+            return "ok"
+        }
+    }
+    return "error";
+}
+
+func getText(_ elementId:String) -> String {
+    return "";
+}
+
+func setValue2(_ elementId:String, _ text:String) -> String {
+    if let obj = findNodeByEleId(elementId) {
+        if let window = obj as? NSWindow {
+            return "todo"
+        } else if let view = obj as? NSView {
+            simulateMouseClick(view, dbClick: true)
+            
+            simulateCommandA()
+            simulateBackspace()
+            
+            simulateKeyboardInput(text: text)
+            return "ok"
+        }
+    }
+    return "error";
+}
+
+func clear(_ elementId:String) -> String {
+    if let obj = findNodeByEleId(elementId) {
+        if let window = obj as? NSWindow {
+            return "todo"
+        } else if let view = obj as? NSView {
+            simulateMouseClick(view, dbClick: true)
+            
+            simulateCommandA()
+            simulateBackspace()
+            return "ok"
+        }
+    }
+    return "error";
+}
+
+let server = HttpServer()
+
+@objcMembers
+class AppiumDriver: NSObject {
+    static func Run() {
+        server["/getPageSource"] = { request in
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = getPageSource();
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/getScreenshot"] = { request in
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = getScreenshot();
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/getWindowRect"] = { request in
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = getWindowRect();
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/findElOrEls"] = { request in
+            let dic = Dictionary(uniqueKeysWithValues: request.queryParams)
+            let strategy = dic["strategy"] ?? "";
+            let selector = dic["selector"] ?? "";
+            let multiple = dic["multiple"] ?? "";
+            let context = dic["context"] ?? "";
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = findElOrEls(strategy, selector.removingPercentEncoding ?? selector, multiple, context);
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/click"] = { request in
+            let dic = Dictionary(uniqueKeysWithValues: request.queryParams)
+            let elementId = dic["elementId"] ?? "";
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = click(elementId);
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/getText"] = { request in
+            let dic = Dictionary(uniqueKeysWithValues: request.queryParams)
+            let elementId = dic["elementId"] ?? "";
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = getText(elementId);
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/setValue"] = { request in
+            let dic = Dictionary(uniqueKeysWithValues: request.queryParams)
+            let elementId = dic["elementId"] ?? "";
+            let text = dic["text"] ?? "";
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = setValue2(elementId, text.removingPercentEncoding ?? text);
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        server["/clear"] = { request in
+            let dic = Dictionary(uniqueKeysWithValues: request.queryParams)
+            let elementId = dic["elementId"] ?? "";
+            var ret = "";
+            DispatchQueue.main.sync {
+                ret = clear(elementId);
+            }
+            return HttpResponse.ok(.text(ret))
+        }
+        
+        do {
+            try server.start(4724, forceIPv4: true)
+            print("Server has started (port: \(try server.port()))")
+        } catch {
+            print("Server start error: \(error)")
+        }
+        
+        // test
+        Test();
+    }
+    
+    static func Test() {
+        let testCases = [
+            "_NS:8",              // "_NS_8"
+            "ABC__NS:8",          // "ABC_NS_8"
+            "my tag name",        // "my_tag_name"
+            "1invalid-tag!name$", // "1invalid_tag_name_"
+            ":tag:name:",         // "_tag_name_"
+            "__test__tag__",      // "_test_tag_"
+            "__",                 // "_"
+            "___",                // "_"
+            "",                   // ""
+        ]
+        for testCase in testCases {
+            let sanitizedTagName = sanitizeTagName(testCase)
+            print("Original: \(testCase), Sanitized: \(sanitizedTagName)")
+        }
     }
 }
