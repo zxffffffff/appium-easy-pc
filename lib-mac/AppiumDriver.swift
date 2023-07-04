@@ -350,10 +350,10 @@ func getScreenshotBase64() -> String {
     
     var newY = 0.0
     if let screen = window.screen {
-        newY = screen.frame.height - (window.frame.height + window.frame.origin.y)
+        newY = Double(screen.frame.height - (window.frame.height + window.frame.origin.y))
     }
     
-    let imageRect = NSRect(x:window.frame.origin.x, y:newY, width:window.frame.width, height:window.frame.height)
+    let imageRect = NSRect(x:window.frame.origin.x, y:CGFloat(newY), width:window.frame.width, height:window.frame.height)
     print("getScreenshotBase64 imageRect: \(imageRect)");
     
     if let cgImage = CGWindowListCreateImage(imageRect, .optionIncludingWindow, CGWindowID(window.windowNumber), .bestResolution) {
@@ -410,13 +410,11 @@ class EventSender {
     }
     
     private func startTimer() {
-        // 创建一个每隔一段时间触发的定时器
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true, block: { [weak self] (_) in
-            self?.sendNextEvent()
-        })
+        timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(timerFired), userInfo: nil, repeats: true)
     }
     
-    private func sendNextEvent() {
+    @objc func timerFired() {
+        // 这里是定时器触发时要执行的代码
         guard let task = taskQueue.first else {
             // 事件队列为空，停止定时器
             stopTimer()
