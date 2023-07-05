@@ -38,7 +38,7 @@ class AppiumPCDriver extends BaseDriver {
 
   locatorStrategies = ['xpath']
   elementCache = {}
-  desiredCapConstraints = { appPath: { presence: true, isString: true } }
+  // 参数：desiredCapConstraints = { appPath: { presence: true, isString: true } }
 
   async createSession(...args) {
     const res = await super.createSession(...args)
@@ -66,7 +66,7 @@ class AppiumPCDriver extends BaseDriver {
   }
 
   async getPageSource() {
-    //return `<files>\n${this.opts.appPath}</files>`
+    // 参数：`${this.opts.appPath}`
     const res = await httpGet('getPageSource')
     log.info(`getPageSource ` /*+ res*/);
     return res;
@@ -95,6 +95,11 @@ class AppiumPCDriver extends BaseDriver {
   async click(elementId) {
     const res = await httpGet('click', new Map([["elementId", elementId ?? ""]]));
     log.info(`click ` + res);
+  }
+  
+  async touchLongClick(elementId) {
+    const res = await httpGet('touchLongClick', new Map([["elementId", elementId ?? ""]]));
+    log.info(`touchLongClick ` + res);
   }
   
   async getText(elementId) {

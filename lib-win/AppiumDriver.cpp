@@ -38,14 +38,16 @@ std::string getHostWndName(HWND hWnd)
 
 std::string getWndName(SWindow* pWnd)
 {
-    if (XXString(pWnd->GetObjectClass()) == L"hostwnd")
+    std::string name = "";
+    if (pWnd->GetObjectClass() == SHostWnd::GetClassName())
     {
-        return getHostWndName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
+        name = HSToF8(pWnd->GetObjectClass())
+            + "_" + getHostWndName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
     }
-
-    std::string name = XXSToF8(pWnd->GetName());
-    if (name == "")
-        name = "no-name";
+    else {
+        name = HSToF8(pWnd->GetObjectClass())
+            + "_" + HSToF8(pWnd->GetName());
+    }
     return name;
 }
 
@@ -160,7 +162,7 @@ UIInfo parseNodeInfo(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
     info.s_class = XXSToF8(pWnd->GetObjectClass());
     info.text = XXSToF8(pWnd->GetWindowText(FALSE));
     info.textRaw = XXSToF8(pWnd->GetWindowText(TRUE));
-    info.resource_id = XXSToF8(pWnd->GetAttribute(L"skin"));
+    // info.resource_id
     info.checked = pWnd->GetState() & WndState_Check;
     info.enabled = pWnd->IsEnable();
     info.focusable = pWnd->IsFocusable();
@@ -587,35 +589,39 @@ void simulateKeyCodeInput(WORD virtualKeyCode, bool isCtrlPressed)
 }
 
 // 模拟文字输入
-void simulateKeyboardInput(const std::wstring& text)
+void simulateKeyboardInput(const std::string& text)
 {
-    for (wchar_t ch : text)
+    std::wstring unicode = CXFunc::F8ToWStr(text);
+    for (int i = 0; i < unicode.size(); ++i)
     {
-        // 转换为扫描码
-        WORD vk = VkKeyScan(ch);
-        BYTE scanCode = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+        wchar_t c = unicode[i];
 
-        // 模拟按下
-        KEYBDINPUT kbDown = { 0 };
-        kbDown.wScan = scanCode;
-        kbDown.dwFlags = KEYEVENTF_SCANCODE;
+        // 重复的字符会被丢弃，添加一个垃圾字符
+        if (i > 0 && c == unicode[i - 1])
+        {
+            INPUT inputs[2];
 
-        INPUT inputDown = { 0 };
-        inputDown.type = INPUT_KEYBOARD;
-        inputDown.ki = kbDown;
+            inputs[0].type = INPUT_KEYBOARD;
+            inputs[0].ki.wVk = VK_SHIFT;
+            inputs[0].ki.dwFlags = 0;
+            inputs[0].ki.time = 0;
+            inputs[0].ki.dwExtraInfo = 0;
 
-        // 模拟释放
-        KEYBDINPUT kbUp = { 0 };
-        kbUp.wScan = scanCode;
-        kbUp.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+            inputs[1].type = INPUT_KEYBOARD;
+            inputs[1].ki.wVk = VK_SHIFT;
+            inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            inputs[1].ki.time = 0;
+            inputs[1].ki.dwExtraInfo = 0;
 
-        INPUT inputUp = { 0 };
-        inputUp.type = INPUT_KEYBOARD;
-        inputUp.ki = kbUp;
+            SendInput(2, inputs, sizeof(INPUT));
+        }
 
-        // 发送输入事件
-        INPUT inputs[2] = { inputDown, inputUp };
-        SendInput(2, inputs, sizeof(INPUT));
+        INPUT input = { 0 };
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = 0;
+        input.ki.wScan = c;
+        input.ki.dwFlags = KEYEVENTF_UNICODE;
+        SendInput(1, &input, sizeof(INPUT));
     }
 }
 
