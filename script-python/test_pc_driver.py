@@ -77,7 +77,7 @@ def test_r_click(appium_pc_connect):
     actions.perform()
 
 # 测试输入
-def test_r_click(appium_pc_connect):
+def test_input(appium_pc_connect):
     print(sys._getframe().f_code.co_name)
     driver = appium_pc_connect
     # do test
