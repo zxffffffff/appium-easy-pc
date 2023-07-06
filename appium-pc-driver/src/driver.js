@@ -38,11 +38,12 @@ class AppiumPCDriver extends BaseDriver {
 
   locatorStrategies = ['xpath']
   elementCache = {}
-  // 参数：desiredCapConstraints = { appPath: { presence: true, isString: true } }
+  desiredCapConstraints = { appPath: { presence: true, isString: true } }
 
   async createSession(...args) {
     const res = await super.createSession(...args)
     // sessionId, caps
+    log.info(`appPath = '${this.opts.appPath}'`)
     return res
   }
 
@@ -54,21 +55,17 @@ class AppiumPCDriver extends BaseDriver {
   // 在 pc 端实现 http server
   async getScreenshot() {
     const res = await httpGet('getScreenshot')
-    log.info(`getScreenshot ` /*+ res*/);
     return res;
   }
 
   async getWindowRect() {
     const res = await httpGet('getWindowRect')
-    log.info(`getWindowRect ` + res);
     const obj = JSON.parse(res);
     return obj;
   }
 
   async getPageSource() {
-    // 参数：`${this.opts.appPath}`
     const res = await httpGet('getPageSource')
-    log.info(`getPageSource ` /*+ res*/);
     return res;
   }
 
@@ -84,7 +81,6 @@ class AppiumPCDriver extends BaseDriver {
       ["multiple", multiple ?? ""],
       ["context", context ?? ""]
     ]));
-    log.info(`findElOrEls ` + res);
     if (res.length < 1) {
       throw new errors.NoSuchElementError()
     }
@@ -94,17 +90,14 @@ class AppiumPCDriver extends BaseDriver {
 
   async click(elementId) {
     const res = await httpGet('click', new Map([["elementId", elementId ?? ""]]));
-    log.info(`click ` + res);
   }
   
   async touchLongClick(elementId) {
     const res = await httpGet('touchLongClick', new Map([["elementId", elementId ?? ""]]));
-    log.info(`touchLongClick ` + res);
   }
   
   async getText(elementId) {
     const res = await httpGet('getText', new Map([["elementId", elementId ?? ""]]));
-    log.info(`getText ` + res);
     return res;
   }
 
@@ -113,12 +106,18 @@ class AppiumPCDriver extends BaseDriver {
       ["text", text ?? ""],
       ["elementId", elementId ?? ""]
     ]));
-    log.info(`setValue ` + res);
   }
 
   async clear(elementId) {
     const res = await httpGet('clear', new Map([["elementId", elementId ?? ""]]));
-    log.info(`clear ` + res);
+  }
+
+  async getAttribute(name, elementId) {
+    const res = await httpGet('getAttribute', new Map([
+      ["name", name ?? ""],
+      ["elementId", elementId ?? ""]
+    ]));
+    return res
   }
 }
 

@@ -268,7 +268,8 @@
 ```
 
 - `findElOrEls` @returns A single element or list of elements
-参数
+- https://appium.io/docs/en/2.0/reference/interfaces/appium_types.IFindCommands/#findelorels
+- 参数
 ```js
 strategy // xpath
 selector // /root/xxx/v_Main/caption/no-name[1]
@@ -289,3 +290,6 @@ context
 - `setValue`
 
 - `clear`
+
+- `getAttribute` 
+- https://appium.io/docs/en/2.0/reference/classes/appium_fake_driver.FakeDriver/#getattribute
