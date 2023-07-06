@@ -10,6 +10,10 @@ using namespace std;
 using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
 
+#include "XSSignal/JumpBase.h"
+#include "XSPerformance/Chrono.h"
+#include "XSHelper/XSWindowHelper.h"
+
 #include "tinyxml2.h"
 #include "httplib.h"
 #include "json.hpp"
@@ -33,10 +37,10 @@ namespace
 
         void init(string name, CRect pos, string text, string other)
         {
-            simulate_name = F8ToXX(name);
+            simulate_name = F8ToXS(name);
             simulate_rect = pos;
-            SetWindowText(F8ToXX(text));
-            SetOther(F8ToXX(other));
+            SetWindowText(F8ToXS(text));
+            SetOther(F8ToXS(other));
         }
 
         virtual LPCWSTR       GetName() const override
@@ -50,7 +54,7 @@ namespace
 
         SWindow* simulate_parent;
         int simulate_index;
-        XXtring simulate_name;
+        XString simulate_name;
         CRect simulate_rect;
     };
 
@@ -62,14 +66,15 @@ namespace
         if (pWnd)
             return pWnd;
             
-        pWnd = new SimulateWindow(parent, g_simulateWindows.size());
+        pWnd = new SimulateWindow(parent, g_simulateWindows[parent].size());
         g_simulateWindows[parent][name] = pWnd;
         return pWnd;
     }
 
     SimulateWindow* FindSimulateWindow(SWindow* parent, const std::string& name)
     {
-        return g_simulateWindows[parent][name];
+        SimulateWindow* pWnd = g_simulateWindows[parent][name];
+        return pWnd;
     }
 }
 
@@ -85,7 +90,7 @@ std::string getHostWndName(HWND hWnd)
 {
     wchar_t buf[256];
     ::GetWindowTextW(hWnd, buf, sizeof(buf));
-    std::string name = XXToF8(buf);
+    std::string name = XSToF8(buf);
     if (name == "")
         name = "no-name";
     return name;
@@ -123,12 +128,12 @@ std::string getWndName(SWindow* pWnd)
     std::string name = "";
     if (pWnd->GetObjectClass() == SHostWnd::GetClassName())
     {
-        name = XXToF8(pWnd->GetObjectClass())
+        name = XSToF8(pWnd->GetObjectClass())
             + "_" + getHostWndName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
     }
     else {
-        name = XXToF8(pWnd->GetObjectClass())
-            + "_" + XXToF8(pWnd->GetName());
+        name = XSToF8(pWnd->GetObjectClass())
+            + "_" + XSToF8(pWnd->GetName());
     }
     return sanitizeTagName(name);
 }
@@ -139,7 +144,10 @@ std::string getWndText(SWindow* pWnd, BOOL bRawText = FALSE)
     {
         return getHostWndName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
     }
-    return XXToF8(pWnd->GetWindowText(bRawText));
+    auto text = pWnd->GetWindowText(bRawText);
+    if (!bRawText)
+        text = GETSTRING(text); // 兼容自绘
+    return XSToF8(text);
 }
 
 std::string getResId(SWindow* pWnd)
@@ -152,7 +160,7 @@ std::string getWndEleId(SWindow* pWnd)
 {
     if (pWnd->GetObjectClass() == SimulateWindow::GetClassName())
     {
-        return "[simulate]_" + std::to_string(uint64_t(pWnd->GetSwnd())) + '_' + XXToF8(static_cast<SimulateWindow*>(pWnd)->GetName());
+        return "[simulate]_" + std::to_string(uint64_t(static_cast<SimulateWindow*>(pWnd)->simulate_parent->GetSwnd())) + '_' + XSToF8(pWnd->GetName());
     }
     else if (pWnd->GetObjectClass() == SHostWnd::GetClassName())
     {
@@ -251,7 +259,9 @@ struct UIInfo
     bool focused = false;
     //bool password = false;
     //bool scrollable = false;
-    //bool selected = false;
+    bool selected = false;
+    int offset_to_screen_x = 0;
+    int offset_to_screen_y = 0;
     int x = 0;
     int y = 0;
     int width = 0;
@@ -259,6 +269,11 @@ struct UIInfo
     bool displayed = false;
     //std::string hint; //[可选] hint="Enter name"
     std::string other;
+
+    bool valid()
+    {
+        return (!name.empty() && !elementId.empty());
+    }
 };
 
 struct UINode
@@ -267,14 +282,27 @@ struct UINode
     std::vector<std::shared_ptr<UINode>> children;
 };
 
-UIInfo parseNodeInfo(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
+UIInfo parseNodeInfo(SWindow* pWnd, int index = 0)
 {
+    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
+    SHostWnd* pHostMain = getHostWnd(hMainWnd);
+    CPoint offset_to_screen;
+    ::ClientToScreen(pHostMain->m_hWnd, &offset_to_screen);
+
+    CPoint offset_to_main;
+    SHostWnd* pHost = pWnd->GetHost();
+    if (pHost != pHostMain)
+    {
+        ::ClientToScreen(pHost->m_hWnd, &offset_to_main);
+        offset_to_main.Offset(-offset_to_screen);
+    }
+    
     UIInfo info;
 
     info.elementId = getWndEleId(pWnd);
     info.name = getWndName(pWnd);
     info.index = index;
-    info.s_class = XXToF8(pWnd->GetObjectClass());
+    info.s_class = XSToF8(pWnd->GetObjectClass());
     info.text = getWndText(pWnd, FALSE);
     info.original_text = getWndText(pWnd, TRUE);
     info.resource_id = getResId(pWnd);
@@ -282,12 +310,14 @@ UIInfo parseNodeInfo(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
     info.enabled = pWnd->IsEnable();
     info.focusable = pWnd->IsFocusable();
     info.focused = pWnd->IsFocused();
-    info.x = offset.x + pWnd->GetClientRect().left;
-    info.y = offset.y + pWnd->GetClientRect().top;
+    info.offset_to_screen_x = offset_to_screen.x;
+    info.offset_to_screen_y = offset_to_screen.y;
+    info.x = offset_to_main.x + pWnd->GetClientRect().left;
+    info.y = offset_to_main.y + pWnd->GetClientRect().top;
     info.width = pWnd->GetClientRect().Width();
     info.height = pWnd->GetClientRect().Height();
     info.displayed = pWnd->IsVisible(TRUE);
-    info.other = XXToF8(pWnd->GetOther());
+    info.other = XSToF8(pWnd->GetOther());
 
     assert(!info.elementId.empty());
     assert(!info.name.empty());
@@ -296,11 +326,11 @@ UIInfo parseNodeInfo(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
     return info;
 }
 
-std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint(), int index = 0)
+std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
 {
     std::shared_ptr<UINode> node = std::make_shared<UINode>();
 
-    node->info = parseNodeInfo(pWnd, offset, index);
+    node->info = parseNodeInfo(pWnd, index);
 
     SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
     while (pChild)
@@ -308,19 +338,20 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
         // 控件隐藏则不递归查找，提高速度
         if (pChild->IsVisible(TRUE))
         {
-            node->children.push_back(parseNodeRecursive(pChild, offset, node->children.size()));
+            node->children.push_back(parseNodeRecursive(pChild, node->children.size()));
         }
         pChild = pChild->GetWindow(GSW_NEXTSIBLING);
     }
 
-    const std::string classType = XXToF8(pWnd->GetObjectClass());
-    if (classType == "XTab")
+    const std::string classType = XSToF8(pWnd->GetObjectClass());
+    if (classType == "XTab" || classType == "SFTab")
     {
-        int cnt = XXToI(pWnd->GetAttribute(L"tabCount"));
+        int cnt = XSToI(pWnd->GetAttribute(L"count"));
+        int sel = XSToI(pWnd->GetAttribute(L"select"));
         for (int i = 0; i < cnt; i++)
         {
-            const string item = "tabItem_" + to_string(i);
-            const string attrs = XX2S(pWnd->GetAttribute(S2XX(item)));
+            const string item = "item_" + to_string(i);
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
             auto list = XXFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
@@ -334,17 +365,22 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
 
                 SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
                 pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, offset, node->children.size()));
+                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
+
+                if (sel == i)
+                {
+                    node->children.back()->info.selected = true;
+                }
             }
         }
     }
-    else if (classType == "Level")
+    else if (classType == "Level" || classType == "SFCtrl")
     {
-        int cnt = XXToI(pWnd->GetAttribute(L"levelCount"));
+        int cnt = XSToI(pWnd->GetAttribute(L"count"));
         for (int i = 0; i < cnt; i++)
         {
-            const string item = "levelItem_" + to_string(i);
-            const string attrs = XX2S(pWnd->GetAttribute(S2XX(item)));
+            const string item = "item_" + to_string(i);
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
             auto list = XXFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
@@ -358,18 +394,18 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
 
                 SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
                 pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, offset, node->children.size()));
+                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
             }
         }
     }
-    else if (classType == "XGrid" || classType == "XXGrid")
+    else if (classType == "XGrid" || classType == "XSGrid")
     {
-        int rowCount = XXToI(pWnd->GetAttribute(L"rowCount"));
-        int colCount = XXToI(pWnd->GetAttribute(L"colCount"));
+        int rowCount = XSToI(pWnd->GetAttribute(L"rowCount"));
+        int colCount = XSToI(pWnd->GetAttribute(L"colCount"));
         int rowBegin = 0;
         int rowEnd = rowCount - 1;
-        string screenRowCol = XX2S(pWnd->GetAttribute(L"screenRowRange"));
-        auto screenV = XXCommon::SplitStr(screenRowCol, ',');
+        string screenRowCol = XS2S(pWnd->GetAttribute(L"screenRowRange"));
+        auto screenV = XSCommon::SplitStr(screenRowCol, ',');
         if (screenV.size() == 2)
         {
             rowBegin = stoi(screenV[0]);
@@ -378,7 +414,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
         for (int col = 0; col < colCount; col++)
         {
             const string item = "headItem_" + to_string(col);
-            const string attrs = XX2S(pWnd->GetAttribute(S2XX(item)));
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
             auto list = XXFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
@@ -392,7 +428,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
 
                 SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
                 pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, offset, node->children.size()));
+                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
             }
         }
         for (int row = rowBegin; row <= rowEnd; row++)
@@ -400,7 +436,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
             for (int col = 0; col < colCount; col++)
             {
                 const string item = "item_" + to_string(row) + "_" + to_string(col);
-                const string attrs = XX2S(pWnd->GetAttribute(S2XX(item)));
+                const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
                 auto list = XXFunc::Split(attrs, ',');
                 if (list.size() == 6)
                 {
@@ -414,7 +450,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, CPoint offset = CPoint
 
                     SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
                     pSimulate->init(item, { l, t, r, b }, text, other);
-                    node->children.push_back(parseNodeRecursive(pSimulate, offset, node->children.size()));
+                    node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
                 }
             }
         }
@@ -440,8 +476,8 @@ std::shared_ptr<UINode> getAllNodes()
         return top_node;
     std::string nameMain = getHostWndName(hMainWnd);
 
-    CRect realScreenRect = XXWindowHelper::GetTotalScreen();
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
+    CRect realScreenRect = XSWindowHelper::GetTotalScreen();
+    CRect mainGeometry = XSWindowHelper::GetGeometry(pHostMain);
     CPoint mainOffset = mainGeometry.TopLeft();
     CRect screenRect = mainGeometry;
 
@@ -455,14 +491,18 @@ std::shared_ptr<UINode> getAllNodes()
         if (!pHost) continue;
         if (!pHost->IsWindowVisible()) continue;
 
-        CPoint screenOffset;
-        if (pHost != pHostMain)
+        CPoint offset;
+        if (pHost == pHostMain)
         {
-            ::ClientToScreen(pHost->m_hWnd, &screenOffset);
-            screenOffset.Offset(-mainOffset);
+            offset = mainOffset;
+        }
+        else
+        {
+            ::ClientToScreen(pHost->m_hWnd, &offset);
+            offset.Offset(-mainOffset);
         }
 
-        top_node->children.push_back(parseNodeRecursive(pHost, screenOffset, top_node->children.size()));
+        top_node->children.push_back(parseNodeRecursive(pHost, top_node->children.size()));
     }
 
     return top_node;
@@ -533,13 +573,13 @@ std::vector<std::string> findNodesRecursive(
         pChild = pChild->GetWindow(GSW_NEXTSIBLING);
     }
 
-    const std::string classType = XXToF8(pWnd->GetObjectClass());
-    if (classType == "XTab")
+    const std::string classType = XSToF8(pWnd->GetObjectClass());
+    if (classType == "XTab" || classType == "Level" || classType == "SFCtrl" || classType == "SFTab")
     {
-        int cnt = XXToI(pWnd->GetAttribute(L"tabCount"));
+        int cnt = XSToI(pWnd->GetAttribute(L"count"));
         for (int i = 0; i < cnt; i++)
         {
-            const string item = "tabItem_" + to_string(i);
+            const string item = "item_" + to_string(i);
 
             if (SimulateWindow* pSimulate = FindSimulateWindow(pWnd, item))
             {
@@ -548,28 +588,14 @@ std::vector<std::string> findNodesRecursive(
             }
         }
     }
-    else if (classType == "Level")
+    else if (classType == "XGrid" || classType == "XSGrid")
     {
-        int cnt = XXToI(pWnd->GetAttribute(L"levelCount"));
-        for (int i = 0; i < cnt; i++)
-        {
-            const string item = "levelItem_" + to_string(i);
-
-            if (SimulateWindow* pSimulate = FindSimulateWindow(pWnd, item))
-            {
-                auto v2 = findNodesRecursive(pSimulate, path_name, repeat_name2);
-                v.insert(v.end(), v2.begin(), v2.end());
-            }
-        }
-    }
-    else if (classType == "XGrid" || classType == "XXGrid")
-    {
-        int rowCount = XXToI(pWnd->GetAttribute(L"rowCount"));
-        int colCount = XXToI(pWnd->GetAttribute(L"colCount"));
+        int rowCount = XSToI(pWnd->GetAttribute(L"rowCount"));
+        int colCount = XSToI(pWnd->GetAttribute(L"colCount"));
         int rowBegin = 0;
         int rowEnd = rowCount - 1;
-        string screenRowCol = XX2S(pWnd->GetAttribute(L"screenRowRange"));
-        auto screenV = XXCommon::SplitStr(screenRowCol, ',');
+        string screenRowCol = XS2S(pWnd->GetAttribute(L"screenRowRange"));
+        auto screenV = XSCommon::SplitStr(screenRowCol, ',');
         if (screenV.size() == 2)
         {
             rowBegin = stoi(screenV[0]);
@@ -652,7 +678,7 @@ CRect getMainGeometry()
     if (!pHostMain)
         return CRect();
 
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
+    CRect mainGeometry = XSWindowHelper::GetGeometry(pHostMain);
     return mainGeometry;
 }
 
@@ -778,8 +804,8 @@ std::string getScreenshotBase64()
     if (!pHostMain)
         return "";
 
-    CRect realScreenRect = XXWindowHelper::GetTotalScreen();
-    CRect mainGeometry = XXWindowHelper::GetGeometry(pHostMain);
+    CRect realScreenRect = XSWindowHelper::GetTotalScreen();
+    CRect mainGeometry = XSWindowHelper::GetGeometry(pHostMain);
 
     int x = mainGeometry.left;
     int y = mainGeometry.top;
@@ -829,18 +855,15 @@ std::string getScreenshotBase64()
 // 模拟鼠标点击
 void simulateMouseClick(int x, int y, DWORD dwFlags = MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP)
 {
-    XXtring flag;
-    if (dwFlags & MOUSEEVENTF_LEFTDOWN)
-        flag += L"LD";
-    if (dwFlags & MOUSEEVENTF_RIGHTDOWN)
-        flag += L"RD";
-    if (dwFlags & MOUSEEVENTF_LEFTUP)
-        flag += L"LU";
-    if (dwFlags & MOUSEEVENTF_RIGHTUP)
-        flag += L"RU";
+    // 创建鼠标事件
+    INPUT input = { 0 };
+    input.type = INPUT_MOUSE;
+    input.mi.dx = x * 65536 / GetSystemMetrics(SM_XXSCREEN);
+    input.mi.dy = y * 65536 / GetSystemMetrics(SM_CYSCREEN);
+    input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | dwFlags;
 
-    SetCursorPos(x, y);
-    mouse_event(dwFlags, x, y, 0, 0);
+    // 发送鼠标事件
+    SendInput(1, &input, sizeof(INPUT));
 }
 
 // 模拟键盘输入 Ctrl+A => KeyInput(VK_A, true);
@@ -933,7 +956,9 @@ void node2xml_recursive(std::shared_ptr<UINode> node, tinyxml2::XMLElement* pare
     element->SetAttribute("focused", node->info.focused);
     //element->SetAttribute("password", node->info.password);
     //element->SetAttribute("scrollable", node->info.scrollable);
-    //element->SetAttribute("selected", node->info.selected);
+    element->SetAttribute("selected", node->info.selected);
+    element->SetAttribute("offset_to_screen_x", node->info.offset_to_screen_x);
+    element->SetAttribute("offset_to_screen_y", node->info.offset_to_screen_y);
     element->SetAttribute("x", node->info.x);
     element->SetAttribute("y", node->info.y);
     element->SetAttribute("width", node->info.width);
@@ -1013,7 +1038,7 @@ std::string findElOrEls(
             return "";
 
         bool multi = (multiple == "true");
-        auto path_name = XXCommon::SplitStr(selector.substr(1), '/');
+        auto path_name = XSCommon::SplitStr(selector.substr(1), '/');
 
         std::vector<std::string> eles = findEleId(path_name);
         if (eles.empty())
@@ -1041,12 +1066,44 @@ std::string findElOrEls(
     return "";
 }
 
-std::string getAttribute(const std::string& name, const std::string& elementId)
+UIInfo getEleInfo(const std::string& elementId)
 {
     auto pWnd = GetWndByElementId(elementId);
     if (!pWnd)
-        return "error";
+        return {};
+
+    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
+    if (!hMainWnd)
+        return {};
+
+    SHostWnd* pHostMain = getHostWnd(hMainWnd);
+    if (!pHostMain)
+        return {};
+
+    CRect mainGeometry = XSWindowHelper::GetGeometry(pHostMain);
+    CPoint mainOffset = mainGeometry.TopLeft();
+
+    SHostWnd* pHost = pWnd->GetHost();
+    CPoint offset;
+    if (pHost == pHostMain)
+    {
+        offset = mainOffset;
+    }
+    else
+    {
+        ::ClientToScreen(pHost->m_hWnd, &offset);
+        offset.Offset(-mainOffset);
+    }
+
     auto info = parseNodeInfo(pWnd);
+    return info;
+}
+
+std::string getAttribute(const std::string& name, const std::string& elementId)
+{
+    auto info = getEleInfo(elementId);
+    if (!info.valid())
+        return "error";
 
     if (name == "name")
         return info.name;
@@ -1078,8 +1135,12 @@ std::string getAttribute(const std::string& name, const std::string& elementId)
     //    return info.password ? "true" : "false";
     //if (name == "scrollable")
     //    return info.scrollable ? "true" : "false";
-    //if (name == "selected")
-    //    return info.selected ? "true" : "false";
+    if (name == "selected")
+        return info.selected ? "true" : "false";
+    if (name == "offset_to_screen_x")
+        return std::to_string(info.offset_to_screen_x);
+    if (name == "offset_to_screen_y")
+        return std::to_string(info.offset_to_screen_y);
     if (name == "x")
         return std::to_string(info.x);
     if (name == "y")
@@ -1097,22 +1158,25 @@ std::string getAttribute(const std::string& name, const std::string& elementId)
 
 std::string performTouch(const std::string& action, const std::string& elementId, const std::string& duration = "")
 {
-    auto pWnd = GetWndByElementId(elementId);
-    if (!pWnd)
+    auto info = getEleInfo(elementId);
+    if (!info.valid())
         return "error";
-
-    auto rect = XXWindowHelper::GetGeometry(pWnd);
-    int x = rect.CenterPoint().x;
-    int y = rect.CenterPoint().y;
 
     if (action == "click")
     {
-        simulateMouseClick(x, y);
+        simulateMouseClick(
+            info.offset_to_screen_x + info.x + info.width / 2, 
+            info.offset_to_screen_y + info.y + info.height / 2
+        );
     }
     else if (action == "longPress")
     {
         // 右键
-        simulateMouseClick(x, y, MOUSEEVENTF_RIGHTDOWN | MOUSEEVENTF_RIGHTUP);
+        simulateMouseClick(
+            info.offset_to_screen_x + info.x + info.width / 2,
+            info.offset_to_screen_y + info.y + info.height / 2
+            , MOUSEEVENTF_RIGHTDOWN | MOUSEEVENTF_RIGHTUP
+        );
     }
 
     return "ok";
@@ -1120,37 +1184,32 @@ std::string performTouch(const std::string& action, const std::string& elementId
 
 std::string getText(const std::string& elementId)
 {
-    auto pWnd = GetWndByElementId(elementId);
-    if (!pWnd)
-        return "";
+    auto info = getEleInfo(elementId);
+    if (!info.valid())
+        return "error";
 
-    return XXToF8(pWnd->GetWindowText());
+    return info.text;
 }
 
 std::string setValue(const std::string& elementId, const std::string& text)
 {
-    auto pWnd = GetWndByElementId(elementId);
-    if (!pWnd)
+    auto info = getEleInfo(elementId);
+    if (!info.valid())
         return "error";
 
-    auto rect = XXWindowHelper::GetGeometry(pWnd);
-    int x = rect.CenterPoint().x;
-    int y = rect.CenterPoint().y;
-
-    int flag = 0;
-    while (!pWnd->GetWindowText().IsEmpty())
+    // 多删几次防止意外
+    for (int i = 0; i < 10; ++i)
     {
-        simulateMouseClick(x, y);
+        simulateMouseClick(
+            info.offset_to_screen_x + info.x + info.width / 2,
+            info.offset_to_screen_y + info.y + info.height / 2
+        );
 
         // 模拟按下 Ctrl+A Backspace
         simulateKeyCodeInput('A', true);
         simulateKeyCodeInput(VK_BACK, false);
-
-        if (++flag > 10)
-            break; //"error: dead loop";
     }
 
-    simulateMouseClick(x, y);
     simulateKeyboardInput(text);
 
     return "ok";
@@ -1158,25 +1217,21 @@ std::string setValue(const std::string& elementId, const std::string& text)
 
 std::string clear(const std::string& elementId)
 {
-    auto pWnd = GetWndByElementId(elementId);
-    if (!pWnd)
+    auto info = getEleInfo(elementId);
+    if (!info.valid())
         return "error";
 
-    auto rect = XXWindowHelper::GetGeometry(pWnd);
-    int x = rect.CenterPoint().x;
-    int y = rect.CenterPoint().y;
-
-    int flag = 0;
-    while (!pWnd->GetWindowText().IsEmpty())
+    // 多删几次防止意外
+    for (int i = 0; i < 10; ++i)
     {
-        simulateMouseClick(x, y);
+        simulateMouseClick(
+            info.offset_to_screen_x + info.x + info.width / 2,
+            info.offset_to_screen_y + info.y + info.height / 2
+        );
 
         // 模拟按下 Ctrl+A Backspace
         simulateKeyCodeInput('A', true);
         simulateKeyCodeInput(VK_BACK, false);
-
-        if (++flag > 10)
-            return "error: dead loop";
     }
 
     return "ok";
