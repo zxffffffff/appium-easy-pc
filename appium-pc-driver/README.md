@@ -20,7 +20,7 @@
 ```
 
 - `getPageSource` @returns The UI hierarchy in a platform-appropriate format (e.g., HTML for a web page)
-参考 Android 字段
+> 参考 Android 字段
 ```xml
 <?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy index="0" class="hierarchy" rotation="0" width="1080" height="2029">
@@ -62,7 +62,7 @@
   </android.widget.FrameLayout>
 </hierarchy>
 ```
-参考 mac 字段
+> 参考 mac 字段
 ```c
   NSString *wdAttributeName = [FBElementUtils wdAttributeNameForAttributeName:name];
   if ([wdAttributeName isEqualToString:FBStringify(XCUIElement, frame)]) {
@@ -268,8 +268,8 @@
 ```
 
 - `findElOrEls` @returns A single element or list of elements
-- https://appium.io/docs/en/2.0/reference/interfaces/appium_types.IFindCommands/#findelorels
-- 参数
+> https://appium.io/docs/en/2.0/reference/interfaces/appium_types.IFindCommands/#findelorels
+> 参数
 ```js
 strategy // xpath
 selector // /root/xxx/v_Main/caption/no-name[1]
@@ -292,4 +292,8 @@ context
 - `clear`
 
 - `getAttribute` 
-- https://appium.io/docs/en/2.0/reference/classes/appium_fake_driver.FakeDriver/#getattribute
+> https://appium.io/docs/en/2.0/reference/classes/appium_fake_driver.FakeDriver/#getattribute
+
+- `performTouch`
+> {"actions":[{"action":"longPress","options":{"element":"[hostwnd]_1182880","duration":1000}}]} 
+

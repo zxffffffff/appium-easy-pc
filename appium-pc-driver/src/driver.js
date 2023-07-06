@@ -92,6 +92,17 @@ class AppiumPCDriver extends BaseDriver {
     const res = await httpGet('click', new Map([["elementId", elementId ?? ""]]));
   }
   
+  async performTouch(args) {
+    args.forEach(async obj => {
+        const { action, options: { element, duration } } = obj;
+        const res = await httpGet('performTouch', new Map([
+            ["action", action ?? ""],
+            ["element", element ?? ""],
+            ["duration", duration ?? ""],
+        ]));
+    });
+  }
+  
   async touchLongClick(elementId) {
     const res = await httpGet('touchLongClick', new Map([["elementId", elementId ?? ""]]));
   }
@@ -102,6 +113,10 @@ class AppiumPCDriver extends BaseDriver {
   }
 
   async setValue(text, elementId) {
+    if (Array.isArray(text)) {
+        // 字符串数组 -> 字符串
+        text = text.join('');
+    }
     const res = await httpGet('setValue', new Map([
       ["text", text ?? ""],
       ["elementId", elementId ?? ""]

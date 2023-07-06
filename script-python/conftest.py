@@ -13,20 +13,20 @@ from selenium.webdriver.common.actions import interaction
 from selenium.webdriver.common.actions.action_builder import ActionBuilder
 from selenium.webdriver.common.actions.pointer_input import PointerInput
 
-class AppiumDriver:
-    driver
 
-    def __init__(self):
-        print("AppiumDriver __init__")
-        caps = {}
-        caps["appium:driverName"] = "pc"
-        caps["appium:automationName"] = "pc"
-        caps["platformName"] = "Windows"
-        caps["appium:newCommandTimeout"] = 3600
-        caps["appium:connectHardwareKeyboard"] = True
+# 连接到 Appium
+@pytest.fixture()
+def appium_pc_connect():
+    print('\n\n--- appium 开始会话 ---')
+    caps = {}
+    caps["appium:driverName"] = "pc"
+    caps["appium:automationName"] = "pc"
+    caps["platformName"] = "Windows"
+    caps["appium:appPath"] = "todo"
+    caps["appium:newCommandTimeout"] = 3600
+    caps["appium:connectHardwareKeyboard"] = True
+    driver = webdriver.Remote("http://127.0.0.1:4723", caps)
+    yield driver
 
-        self.driver = webdriver.Remote("http://127.0.0.1:4723", caps)
-
-    def __del__(self):
-        print("AppiumDriver __del__")
-        self.driver.quit()
+    print('\n--- appium 结束会话 ---')
+    driver.quit()
