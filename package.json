@@ -22,7 +22,6 @@
   "homepage": "https://github.com/zxffffffff/start-appium#readme",
   "dependencies": {
     "appium": "^2.0.0-rc.3",
-    "appium-mac2-driver": "file:appium-mac2-driver",
     "appium-pc-driver": "file:appium-pc-driver"
   }
 }

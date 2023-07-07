@@ -4,9 +4,11 @@
 ![image](https://github.com/zxffffffff/start-appium/blob/main/doc/architecture.png)
 
 # appium 环境记录
-- 创建 `node.js` 项目
+- 安装 `node.js` 环境
 ```js
-npm init
+npm install -g typescript
+npm install -g make-dir-cli rimraf cpr // win
+npm install --save
 ```
 
 - 添加 `appium`
