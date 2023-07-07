@@ -10,10 +10,6 @@ using namespace std;
 using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
 
-#include "XSSignal/JumpBase.h"
-#include "XSPerformance/Chrono.h"
-#include "XSHelper/XSWindowHelper.h"
-
 #include "tinyxml2.h"
 #include "httplib.h"
 #include "json.hpp"
@@ -86,6 +82,154 @@ SHostWnd* getHostWnd(HWND hWnd)
     return pHost;
 }
 
+std::vector<SWindow*> getWndChildren(SWindow* pWnd)
+{
+    std::vector<SWindow*> children;
+
+    SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
+    while (pChild)
+    {
+        // 控件隐藏则不递归查找，提高速度
+        if (pChild->IsVisible(TRUE))
+        {
+            children.push_back(pChild);
+        }
+        pChild = pChild->GetWindow(GSW_NEXTSIBLING);
+    }
+
+    const std::string classType = XSToF8(pWnd->GetObjectClass());
+    if (classType == "XTab" || classType == "SFTab" || classType == "SelfBar")
+    {
+        int cnt = XSToI(pWnd->GetAttribute(L"count"));
+        int sel = XSToI(pWnd->GetAttribute(L"select"));
+
+        pWnd->SetTestDump(L"item_count", IToXS(cnt));
+        pWnd->SetTestDump(L"item_select", IToXS(sel));
+
+        for (int i = 0; i < cnt; i++)
+        {
+            const string item = "item_" + to_string(i);
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
+            auto list = XFunc::Split(attrs, ',');
+            if (list.size() == 6)
+            {
+                CRect rect = pWnd->GetClientRect();
+                int l = stoi(list[0]) + rect.left;
+                int t = stoi(list[1]) + rect.top;
+                int r = l + stoi(list[2]);
+                int b = t + stoi(list[3]);
+                string& text = list[4];
+                string& other = list[5];
+
+                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
+                pSimulate->init(item, { l, t, r, b }, text, other);
+                if (sel == i)
+                {
+                    pSimulate->SetTestDump(L"selected", L"true");
+                }
+                children.push_back(pSimulate);
+            }
+        }
+    }
+    else if (classType == "Level" || classType == "SFCtrl")
+    {
+        int cnt = XSToI(pWnd->GetAttribute(L"count"));
+
+        pWnd->SetTestDump(L"item_count", IToXS(cnt));
+
+        for (int i = 0; i < cnt; i++)
+        {
+            const string item = "item_" + to_string(i);
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
+            auto list = XFunc::Split(attrs, ',');
+            if (list.size() == 6)
+            {
+                CRect rect = pWnd->GetClientRect();
+                int l = stoi(list[0]) + rect.left;
+                int t = stoi(list[1]) + rect.top;
+                int r = l + stoi(list[2]);
+                int b = t + stoi(list[3]);
+                string& text = list[4];
+                string& other = list[5];
+
+                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
+                pSimulate->init(item, { l, t, r, b }, text, other);
+                children.push_back(pSimulate);
+            }
+        }
+    }
+    else if (classType == "XGrid" || classType == "XSGrid")
+    {
+        int rowCount = XSToI(pWnd->GetAttribute(L"rowCount"));
+        int colCount = XSToI(pWnd->GetAttribute(L"colCount"));
+        int sel = XSToI(pWnd->GetAttribute(L"rowSelect"));
+        int rowBegin = 0;
+        int rowEnd = rowCount - 1;
+        string screenRowCol = XS2S(pWnd->GetAttribute(L"screenRowRange"));
+        auto screenV = XSCommon::SplitStr(screenRowCol, ',');
+        if (screenV.size() == 2)
+        {
+            rowBegin = stoi(screenV[0]);
+            rowEnd = stoi(screenV[1]);
+        }
+
+        pWnd->SetTestDump(L"item_rowCount", IToXS(rowCount));
+        pWnd->SetTestDump(L"item_colCount", IToXS(colCount));
+        pWnd->SetTestDump(L"item_rowSelect", IToXS(sel));
+        pWnd->SetTestDump(L"item_rowBegin", IToXS(rowBegin));
+        pWnd->SetTestDump(L"item_rowEnd", IToXS(rowEnd));
+
+        for (int col = 0; col < colCount; col++)
+        {
+            const string item = "headItem_" + to_string(col);
+            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
+            auto list = XFunc::Split(attrs, ',');
+            if (list.size() == 6)
+            {
+                CRect rect = pWnd->GetClientRect();
+                int l = stoi(list[0]) + rect.left;
+                int t = stoi(list[1]) + rect.top;
+                int r = l + stoi(list[2]);
+                int b = t + stoi(list[3]);
+                string& text = list[4];
+                string& other = list[5];
+
+                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
+                pSimulate->init(item, { l, t, r, b }, text, other);
+                children.push_back(pSimulate);
+            }
+        }
+        for (int row = rowBegin; row <= rowEnd; row++)
+        {
+            for (int col = 0; col < colCount; col++)
+            {
+                const string item = "item_" + to_string(row) + "_" + to_string(col);
+                const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
+                auto list = XFunc::Split(attrs, ',');
+                if (list.size() == 6)
+                {
+                    CRect rect /*= m_swnd->GetClientRect()*/;
+                    int l = stoi(list[0]) + rect.left;
+                    int t = stoi(list[1]) + rect.top;
+                    int r = l + stoi(list[2]);
+                    int b = t + stoi(list[3]);
+                    string& text = list[4];
+                    string& other = list[5];
+
+                    SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
+                    pSimulate->init(item, { l, t, r, b }, text, other);
+                    if (sel == row)
+                    {
+                        pSimulate->SetTestDump(L"selected", L"true");
+                    }
+                    children.push_back(pSimulate);
+                }
+            }
+        }
+    }
+    return children;
+}
+
 std::string getHostWndName(HWND hWnd)
 {
     wchar_t buf[256];
@@ -144,10 +288,21 @@ std::string getWndText(SWindow* pWnd, BOOL bRawText = FALSE)
     {
         return getHostWndName(static_cast<SHostWnd*>(pWnd)->m_hWnd);
     }
-    auto text = pWnd->GetWindowText(bRawText);
+    XString text = pWnd->GetWindowText(bRawText);
     if (!bRawText)
         text = GETSTRING(text); // 兼容自绘
     return XSToF8(text);
+}
+
+std::string getWndClass(SWindow* pWnd)
+{
+    XString class_name = pWnd->GetObjectClass();
+    if (class_name == SimulateWindow::GetClassName())
+    {
+        auto pSimulate = static_cast<SimulateWindow*>(pWnd);
+        return getWndClass(pSimulate->simulate_parent) + "_" + XSToF8(class_name);
+    }
+    return XSToF8(class_name);
 }
 
 std::string getResId(SWindow* pWnd)
@@ -302,7 +457,7 @@ UIInfo parseNodeInfo(SWindow* pWnd, int index = 0)
     info.elementId = getWndEleId(pWnd);
     info.tag_name = getWndTagName(pWnd);
     info.index = index;
-    info.s_class = XSToF8(pWnd->GetObjectClass());
+    info.s_class = getWndClass(pWnd);
     info.text = getWndText(pWnd, FALSE);
     info.original_text = getWndText(pWnd, TRUE);
     info.resource_id = getResId(pWnd);
@@ -338,127 +493,10 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
 
     node->info = parseNodeInfo(pWnd, index);
 
-    SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
-    while (pChild)
+    auto children = getWndChildren(pWnd);
+    for (auto pChild : children)
     {
-        // 控件隐藏则不递归查找，提高速度
-        if (pChild->IsVisible(TRUE))
-        {
-            node->children.push_back(parseNodeRecursive(pChild, node->children.size()));
-        }
-        pChild = pChild->GetWindow(GSW_NEXTSIBLING);
-    }
-
-    const std::string classType = XSToF8(pWnd->GetObjectClass());
-    if (classType == "XTab" || classType == "SFTab")
-    {
-        int cnt = XSToI(pWnd->GetAttribute(L"count"));
-        int sel = XSToI(pWnd->GetAttribute(L"select"));
-        for (int i = 0; i < cnt; i++)
-        {
-            const string item = "item_" + to_string(i);
-            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XFunc::Split(attrs, ',');
-            if (list.size() == 6)
-            {
-                CRect rect = pWnd->GetClientRect();
-                int l = stoi(list[0]) + rect.left;
-                int t = stoi(list[1]) + rect.top;
-                int r = l + stoi(list[2]);
-                int b = t + stoi(list[3]);
-                string& text = list[4];
-                string& other = list[5];
-
-                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
-                pSimulate->init(item, { l, t, r, b }, text, other);
-                if (sel == i)
-                {
-                    pSimulate->SetTestDump(L"selected", L"true");
-                }
-                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
-            }
-        }
-    }
-    else if (classType == "Level" || classType == "SFCtrl")
-    {
-        int cnt = XSToI(pWnd->GetAttribute(L"count"));
-        for (int i = 0; i < cnt; i++)
-        {
-            const string item = "item_" + to_string(i);
-            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XFunc::Split(attrs, ',');
-            if (list.size() == 6)
-            {
-                CRect rect = pWnd->GetClientRect();
-                int l = stoi(list[0]) + rect.left;
-                int t = stoi(list[1]) + rect.top;
-                int r = l + stoi(list[2]);
-                int b = t + stoi(list[3]);
-                string& text = list[4];
-                string& other = list[5];
-
-                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
-                pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
-            }
-        }
-    }
-    else if (classType == "XGrid" || classType == "XSGrid")
-    {
-        int rowCount = XSToI(pWnd->GetAttribute(L"rowCount"));
-        int colCount = XSToI(pWnd->GetAttribute(L"colCount"));
-        int rowBegin = 0;
-        int rowEnd = rowCount - 1;
-        string screenRowCol = XS2S(pWnd->GetAttribute(L"screenRowRange"));
-        auto screenV = XSCommon::SplitStr(screenRowCol, ',');
-        if (screenV.size() == 2)
-        {
-            rowBegin = stoi(screenV[0]);
-            rowEnd = stoi(screenV[1]);
-        }
-        for (int col = 0; col < colCount; col++)
-        {
-            const string item = "headItem_" + to_string(col);
-            const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XFunc::Split(attrs, ',');
-            if (list.size() == 6)
-            {
-                CRect rect = pWnd->GetClientRect();
-                int l = stoi(list[0]) + rect.left;
-                int t = stoi(list[1]) + rect.top;
-                int r = l + stoi(list[2]);
-                int b = t + stoi(list[3]);
-                string& text = list[4];
-                string& other = list[5];
-
-                SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
-                pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
-            }
-        }
-        for (int row = rowBegin; row <= rowEnd; row++)
-        {
-            for (int col = 0; col < colCount; col++)
-            {
-                const string item = "item_" + to_string(row) + "_" + to_string(col);
-                const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-                auto list = XFunc::Split(attrs, ',');
-                if (list.size() == 6)
-                {
-                    CRect rect /*= m_swnd->GetClientRect()*/;
-                    int l = stoi(list[0]) + rect.left;
-                    int t = stoi(list[1]) + rect.top;
-                    int r = l + stoi(list[2]);
-                    int b = t + stoi(list[3]);
-                    string& text = list[4];
-                    string& other = list[5];
-
-                    SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
-                    pSimulate->init(item, { l, t, r, b }, text, other);
-                    node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
-                }
-            }
-        }
+        node->children.push_back(parseNodeRecursive(pChild, node->children.size()));
     }
 
     return node;
@@ -513,11 +551,8 @@ std::shared_ptr<UINode> getAllNodes()
     return top_node;
 }
 
-std::vector<std::string> findNodesRecursive(
-    SWindow* pWnd,
-    std::vector<std::string> path_name,
-    std::map<std::string, int>& repeat_name
-) {
+std::vector<std::string> findEleByPathRecursive(SWindow* pWnd, std::vector<std::string> path_name, std::map<std::string, int>& repeat_name) 
+{
     std::vector<std::string> v;
 
     if (path_name.empty())
@@ -565,76 +600,18 @@ std::vector<std::string> findNodesRecursive(
         return v;
     }
 
+    auto children = getWndChildren(pWnd);
     std::map<std::string, int> repeat_name2;
-    SWindow* pChild = pWnd->GetWindow(GSW_FIRSTCHILD);
-    while (pChild)
+    for (auto pChild : children)
     {
-        // 控件隐藏则不递归查找，提高速度
-        if (pChild->IsVisible(TRUE))
-        {
-            auto v2 = findNodesRecursive(pChild, path_name, repeat_name2);
-            v.insert(v.end(), v2.begin(), v2.end());
-        }
-        pChild = pChild->GetWindow(GSW_NEXTSIBLING);
-    }
-
-    const std::string classType = XSToF8(pWnd->GetObjectClass());
-    if (classType == "XTab" || classType == "Level" || classType == "SFCtrl" || classType == "SFTab")
-    {
-        int cnt = XSToI(pWnd->GetAttribute(L"count"));
-        for (int i = 0; i < cnt; i++)
-        {
-            const string item = "item_" + to_string(i);
-
-            if (SimulateWindow* pSimulate = FindSimulateWindow(pWnd, item))
-            {
-                auto v2 = findNodesRecursive(pSimulate, path_name, repeat_name2);
-                v.insert(v.end(), v2.begin(), v2.end());
-            }
-        }
-    }
-    else if (classType == "XGrid" || classType == "XSGrid")
-    {
-        int rowCount = XSToI(pWnd->GetAttribute(L"rowCount"));
-        int colCount = XSToI(pWnd->GetAttribute(L"colCount"));
-        int rowBegin = 0;
-        int rowEnd = rowCount - 1;
-        string screenRowCol = XS2S(pWnd->GetAttribute(L"screenRowRange"));
-        auto screenV = XSCommon::SplitStr(screenRowCol, ',');
-        if (screenV.size() == 2)
-        {
-            rowBegin = stoi(screenV[0]);
-            rowEnd = stoi(screenV[1]);
-        }
-        for (int col = 0; col < colCount; col++)
-        {
-            const string item = "headItem_" + to_string(col);
-
-            if (SimulateWindow* pSimulate = FindSimulateWindow(pWnd, item))
-            {
-                auto v2 = findNodesRecursive(pSimulate, path_name, repeat_name2);
-                v.insert(v.end(), v2.begin(), v2.end());
-            }
-        }
-        for (int row = rowBegin; row <= rowEnd; row++)
-        {
-            for (int col = 0; col < colCount; col++)
-            {
-                const string item = "item_" + to_string(row) + "_" + to_string(col);
-
-                if (SimulateWindow* pSimulate = FindSimulateWindow(pWnd, item))
-                {
-                    auto v2 = findNodesRecursive(pSimulate, path_name, repeat_name2);
-                    v.insert(v.end(), v2.begin(), v2.end());
-                }
-            }
-        }
+        auto v2 = findEleByPathRecursive(pChild, path_name, repeat_name2);
+        v.insert(v.end(), v2.begin(), v2.end());
     }
 
     return v;
 }
 
-std::vector<std::string> findEleId(std::vector<std::string> path_name)
+std::vector<std::string> findEleByPath(std::vector<std::string> path_name)
 {
     std::vector<std::string> v;
 
@@ -665,13 +642,106 @@ std::vector<std::string> findEleId(std::vector<std::string> path_name)
         if (!pHost->IsWindowVisible()) continue;
 
         std::map<std::string, int> repeat_name;
-        auto v2 = (findNodesRecursive(pHost, path_name, repeat_name));
+        auto v2 = (findEleByPathRecursive(pHost, path_name, repeat_name));
         v.insert(v.end(), v2.begin(), v2.end());
     }
 
     return v;
 }
 
+// 模糊匹配，通配符 '?' '*'
+bool fuzzyMatch(string str1, string str2) {
+    int m = str1.length();
+    int n = str2.length();
+
+    vector<vector<bool>> dp(m + 1, vector<bool>(n + 1, false));
+
+    dp[0][0] = true;
+
+    for (int i = 1; i <= m; i++) {
+        dp[i][0] = false;
+    }
+
+    for (int j = 1; j <= n; j++) {
+        dp[0][j] = false;
+    }
+
+    for (int i = 1; i <= m; i++) {
+        for (int j = 1; j <= n; j++) {
+            if (str1[i - 1] == str2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1];
+            }
+            else if (str2[j - 1] == '?') {
+                dp[i][j] = dp[i - 1][j - 1];
+            }
+            else if (str2[j - 1] == '*') {
+                dp[i][j] = dp[i - 1][j] || dp[i][j - 1];
+            }
+            else {
+                dp[i][j] = false;
+            }
+        }
+    }
+
+    return dp[m][n];
+}
+
+std::vector<std::string> findEleByNameRecursive(SWindow* pWnd, const std::string& name)
+{
+    std::vector<std::string> v;
+
+    if (name.empty())
+        return v;
+
+    auto text = getWndText(pWnd);
+    if (fuzzyMatch(text, name))
+    {
+        v.push_back(getWndEleId(pWnd));
+    }
+
+    auto children = getWndChildren(pWnd);
+    for (auto pChild : children)
+    {
+        auto v2 = findEleByNameRecursive(pChild, name);
+        v.insert(v.end(), v2.begin(), v2.end());
+    }
+
+    return v;
+}
+
+std::vector<std::string> findEleByName(const std::string& name)
+{
+    std::vector<std::string> v;
+
+    if (name.empty())
+        return v;
+
+    HWND hMainWnd = SApplication::getSingleton().GetMainWnd();
+    if (!hMainWnd)
+        return v;
+
+    vector<HWND> allWnds = getVisibleWindow();
+    if (allWnds.empty())
+        return v;
+
+    SHostWnd* pHostMain = getHostWnd(hMainWnd);
+    if (!pHostMain)
+        return v;
+
+    for (int i = 0; i < allWnds.size(); i++)
+    {
+        SHostWnd* pHost = getHostWnd(allWnds[i]);
+
+        if (!pHost) continue;
+        if (!pHost->IsWindowVisible()) continue;
+
+        std::map<std::string, int> repeat_name;
+        auto v2 = (findEleByNameRecursive(pHost, name));
+        v.insert(v.end(), v2.begin(), v2.end());
+    }
+
+    return v;
+}
 
 CRect getMainGeometry()
 {
@@ -1042,43 +1112,47 @@ std::string findElOrEls(
     const std::string& multiple, // true or false
     const std::string& context
 ) {
+    if (strategy.empty() || selector.empty())
+        return "";
+
+    std::vector<std::string> eles;
     if (strategy == "xpath")
     {
-        if (selector.empty())
-            return "";
-
-        string str = multiple;
-        std::transform(str.begin(), str.end(), str.begin(), [](auto& c) { return std::tolower(c); });
-        bool multi =
-            (str == "true") ? true :
-            (str == "false") ? false :
-            std::atoi(str.c_str());
         auto path_name = XSCommon::SplitStr(selector.substr(1), '/');
-
-        std::vector<std::string> eles = findEleId(path_name);
-        if (eles.empty())
-            return "";
-
-        if (multi)
-        {
-            nlohmann::json json_array;
-            for (auto& ele : eles)
-                json_array.push_back(ele);
-
-            nlohmann::json json = {
-                { W3C_ELEMENT_KEY, json_array},
-            };
-            return json.dump();
-        }
-        else
-        {
-            nlohmann::json json = {
-                { W3C_ELEMENT_KEY, eles.front() },
-            };
-            return json.dump();
-        }
+        eles = findEleByPath(path_name);
     }
-    return "";
+    else if (strategy == "name")
+    {
+        eles = findEleByName(selector);
+    }
+
+    if (eles.empty())
+        return "";
+
+    string str = multiple;
+    std::transform(str.begin(), str.end(), str.begin(), [](auto& c) { return std::tolower(c); });
+    bool multi =
+        (str == "true") ? true :
+        (str == "false") ? false :
+        std::atoi(str.c_str());
+    if (multi)
+    {
+        nlohmann::json json_array;
+        for (auto& ele : eles) {
+            nlohmann::json json = {
+                { W3C_ELEMENT_KEY, ele }
+            };
+            json_array.push_back(json);
+        }
+        return json_array.dump();
+    }
+    else
+    {
+        nlohmann::json json = {
+            { W3C_ELEMENT_KEY, eles.front() },
+        };
+        return json.dump();
+    }
 }
 
 UIInfo getEleInfo(const std::string& elementId)

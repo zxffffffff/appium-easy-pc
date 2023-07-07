@@ -63,6 +63,8 @@ class AppiumPCDriver extends BaseDriver {
   }
 
   // 在 pc 端实现 http server
+  // throw new errors.NotYetImplementedError('Finding an element from another element not supported')
+
   async getScreenshot() {
     const res = await httpGet('getScreenshot')
     return res;
@@ -80,11 +82,6 @@ class AppiumPCDriver extends BaseDriver {
   }
 
   async findElOrEls(strategy, selector, multiple, context) {
-    if (context) {
-      // TODO could probably support finding elements from within directories
-      throw new errors.NotYetImplementedError('Finding an element from another element not supported')
-    }
-
     const res = await httpGet('findElOrEls', new Map([
       ["strategy", strategy ?? ""],
       ["selector", selector ?? ""],
@@ -96,6 +93,10 @@ class AppiumPCDriver extends BaseDriver {
     }
     const obj = JSON.parse(res);
     return obj;
+  }
+
+  async findElements(strategy, selector) {
+    return await this.findElOrEls(strategy, selector, true, "");
   }
 
   async click(elementId) {
