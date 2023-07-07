@@ -29,7 +29,14 @@ npm install ./appium-mac2-driver
 ## `lib-win` `lib-mac`
 - pc 端创建 http server
 - 利用 win32/mac 接口实现截图、鼠标、键盘等交互
-
+```json
+{
+  "appium:driverName": "pc",
+  "appium:automationName": "pc",
+  "platformName": "Windows",
+  "appPath": "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+}
+```
 # python 脚本记录
 
 ## `pytest`
