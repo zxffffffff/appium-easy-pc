@@ -123,7 +123,7 @@ std::string sanitizeTagName(const std::string& tagName) {
     return sanitizedTagName;
 }
 
-std::string getWndName(SWindow* pWnd)
+std::string getWndTagName(SWindow* pWnd)
 {
     std::string name = "";
     if (pWnd->GetObjectClass() == SHostWnd::GetClassName())
@@ -244,7 +244,7 @@ std::vector<HWND> getVisibleWindow()
 struct UIInfo
 {
     std::string elementId; // m_hWnd or swnd;
-    std::string name;
+    std::string tag_name;
     int index = 0;
     //std::string package; // package="com.android.settings"
     std::string s_class; // class="android.widget.FrameLayout"
@@ -268,11 +268,11 @@ struct UIInfo
     int height = 0;
     bool displayed = false;
     //std::string hint; //[可选] hint="Enter name"
-    std::string other;
+    std::map<std::string, std::string> dump;
 
     bool valid()
     {
-        return (!name.empty() && !elementId.empty());
+        return (!tag_name.empty() && !elementId.empty());
     }
 };
 
@@ -300,7 +300,7 @@ UIInfo parseNodeInfo(SWindow* pWnd, int index = 0)
     UIInfo info;
 
     info.elementId = getWndEleId(pWnd);
-    info.name = getWndName(pWnd);
+    info.tag_name = getWndTagName(pWnd);
     info.index = index;
     info.s_class = XSToF8(pWnd->GetObjectClass());
     info.text = getWndText(pWnd, FALSE);
@@ -317,10 +317,16 @@ UIInfo parseNodeInfo(SWindow* pWnd, int index = 0)
     info.width = pWnd->GetClientRect().Width();
     info.height = pWnd->GetClientRect().Height();
     info.displayed = pWnd->IsVisible(TRUE);
-    info.other = XSToF8(pWnd->GetOther());
+
+    auto testDump = pWnd->GetTestDump();
+    info.dump["other"] = XSToF8(pWnd->GetOther());
+    for (auto ite = testDump.begin(); ite != testDump.end(); ++ite)
+    {
+        info.dump[XSToF8(ite->first)] = XSToF8(ite->second);
+    }
 
     assert(!info.elementId.empty());
-    assert(!info.name.empty());
+    assert(!info.tag_name.empty());
     assert(!info.s_class.empty());
 
     return info;
@@ -352,7 +358,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
         {
             const string item = "item_" + to_string(i);
             const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XXFunc::Split(attrs, ',');
+            auto list = XFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
                 CRect rect = pWnd->GetClientRect();
@@ -365,12 +371,11 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
 
                 SimulateWindow* pSimulate = AppendSimulateWindow(pWnd, item);
                 pSimulate->init(item, { l, t, r, b }, text, other);
-                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
-
                 if (sel == i)
                 {
-                    node->children.back()->info.selected = true;
+                    pSimulate->SetTestDump(L"selected", L"true");
                 }
+                node->children.push_back(parseNodeRecursive(pSimulate, node->children.size()));
             }
         }
     }
@@ -381,7 +386,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
         {
             const string item = "item_" + to_string(i);
             const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XXFunc::Split(attrs, ',');
+            auto list = XFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
                 CRect rect = pWnd->GetClientRect();
@@ -415,7 +420,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
         {
             const string item = "headItem_" + to_string(col);
             const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-            auto list = XXFunc::Split(attrs, ',');
+            auto list = XFunc::Split(attrs, ',');
             if (list.size() == 6)
             {
                 CRect rect = pWnd->GetClientRect();
@@ -437,7 +442,7 @@ std::shared_ptr<UINode> parseNodeRecursive(SWindow* pWnd, int index)
             {
                 const string item = "item_" + to_string(row) + "_" + to_string(col);
                 const string attrs = XS2S(pWnd->GetAttribute(S2XS(item)));
-                auto list = XXFunc::Split(attrs, ',');
+                auto list = XFunc::Split(attrs, ',');
                 if (list.size() == 6)
                 {
                     CRect rect /*= m_swnd->GetClientRect()*/;
@@ -482,7 +487,7 @@ std::shared_ptr<UINode> getAllNodes()
     CRect screenRect = mainGeometry;
 
     top_node->info = parseNodeInfo(pHostMain);
-    top_node->info.name = ROOT_NAME;
+    top_node->info.tag_name = ROOT_NAME;
     for (int i = 0; i < allWnds.size(); i++)
     {
         SHostWnd* pHost = getHostWnd(allWnds[i]);
@@ -518,7 +523,7 @@ std::vector<std::string> findNodesRecursive(
     if (path_name.empty())
         return v;
 
-    std::string name = getWndName(pWnd);
+    std::string name = getWndTagName(pWnd);
     std::string name2 = path_name.front();
     auto mismatchIt = std::mismatch(name.begin(), name.end(), name2.begin(), name2.end());
     if (mismatchIt.first == name.end())
@@ -858,7 +863,7 @@ void simulateMouseClick(int x, int y, DWORD dwFlags = MOUSEEVENTF_LEFTDOWN | MOU
     // 创建鼠标事件
     INPUT input = { 0 };
     input.type = INPUT_MOUSE;
-    input.mi.dx = x * 65536 / GetSystemMetrics(SM_XXSCREEN);
+    input.mi.dx = x * 65536 / GetSystemMetrics(SM_XSCREEN);
     input.mi.dy = y * 65536 / GetSystemMetrics(SM_CYSCREEN);
     input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | dwFlags;
 
@@ -904,7 +909,7 @@ void simulateKeyCodeInput(WORD virtualKeyCode, bool isCtrlPressed = false)
 // 模拟文字输入
 void simulateKeyboardInput(const std::string& text)
 {
-    std::wstring unicode = XXFunc::F8ToWStr(text);
+    std::wstring unicode = XFunc::F8ToWStr(text);
     for (int i = 0; i < unicode.size(); ++i)
     {
         wchar_t c = unicode[i];
@@ -940,7 +945,7 @@ void simulateKeyboardInput(const std::string& text)
 
 void node2xml_recursive(std::shared_ptr<UINode> node, tinyxml2::XMLElement* parent)
 {
-    auto element = parent->InsertNewChildElement(node->info.name.c_str());
+    auto element = parent->InsertNewChildElement(node->info.tag_name.c_str());
     element->SetAttribute("index", node->info.index);
     element->SetAttribute("eleId", node->info.elementId.c_str());
     //element->SetAttribute("package", node->info.package.c_str());
@@ -964,7 +969,12 @@ void node2xml_recursive(std::shared_ptr<UINode> node, tinyxml2::XMLElement* pare
     element->SetAttribute("width", node->info.width);
     element->SetAttribute("height", node->info.height);
     element->SetAttribute("displayed", node->info.displayed);
-    element->SetAttribute("other", node->info.other.c_str());
+
+    // dump可以覆盖已有key
+    for (auto ite = node->info.dump.begin(); ite != node->info.dump.end(); ++ite)
+    {
+        element->SetAttribute(ite->first.c_str(), ite->second.c_str());
+    }
 
     for (auto child : node->children)
         node2xml_recursive(child, element);
@@ -973,7 +983,7 @@ void node2xml_recursive(std::shared_ptr<UINode> node, tinyxml2::XMLElement* pare
 std::string node2xml(std::shared_ptr<UINode> node)
 {
     tinyxml2::XMLDocument doc;
-    auto root = doc.NewElement(node->info.name.c_str());
+    auto root = doc.NewElement(node->info.tag_name.c_str());
     root->SetAttribute("index", node->info.index);
     root->SetAttribute("class", node->info.s_class.c_str());
     root->SetAttribute("width", node->info.width);
@@ -1037,7 +1047,12 @@ std::string findElOrEls(
         if (selector.empty())
             return "";
 
-        bool multi = (multiple == "true");
+        string str = multiple;
+        std::transform(str.begin(), str.end(), str.begin(), [](auto& c) { return std::tolower(c); });
+        bool multi =
+            (str == "true") ? true :
+            (str == "false") ? false :
+            std::atoi(str.c_str());
         auto path_name = XSCommon::SplitStr(selector.substr(1), '/');
 
         std::vector<std::string> eles = findEleId(path_name);
@@ -1106,9 +1121,15 @@ std::string getAttribute(const std::string& name, const std::string& elementId)
         return "error";
 
     if (name == "name")
-        return info.name;
+        return info.tag_name;
     if (name == "eleId")
         return info.elementId;
+
+    // dump可以覆盖已有key
+    auto ite = info.dump.find(name);
+    if (ite != info.dump.end())
+        return ite->second;
+
     //if (name == "package")
     //    return info.package;
     if (name == "class")
@@ -1151,8 +1172,7 @@ std::string getAttribute(const std::string& name, const std::string& elementId)
         return std::to_string(info.height);
     if (name == "displayed") 
         return std::to_string(info.displayed);
-    if (name == "other")
-        return info.other;
+    
     return "";
 }
 

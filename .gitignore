@@ -29,3 +29,7 @@ build/
 .idea
 *DerivedData
 __pycache__
+
+# by zxffffffff
+*.drawio.bkp
+*.drawio.dtmp

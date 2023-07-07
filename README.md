@@ -1,6 +1,8 @@
 # start-appium
 自定义的 Appium PC Driver，需要 Win 和 Mac 开启 Http Server
 
+![image](https://github.com/zxffffffff/start-appium/blob/main/doc/architecture.png)
+
 # appium 环境记录
 - 创建 `node.js` 项目
 ```js

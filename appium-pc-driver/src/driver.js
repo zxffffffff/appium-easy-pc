@@ -30,7 +30,17 @@ async function httpGet(api, map_args) {
         }
         resolve(data.toString());
       }));
+    }).on('error', (err) => {
+      reject(err);
     });
+  }).catch((err) => {
+    if (err.code === 'ECONNRESET') {
+      // 处理 socket hang up 错误
+      reject(err);
+    } else {
+      // 处理其他错误
+      reject(err);
+    }
   });
 }
 
@@ -91,22 +101,22 @@ class AppiumPCDriver extends BaseDriver {
   async click(elementId) {
     const res = await httpGet('click', new Map([["elementId", elementId ?? ""]]));
   }
-  
+
   async performTouch(args) {
     args.forEach(async obj => {
-        const { action, options: { element, duration } } = obj;
-        const res = await httpGet('performTouch', new Map([
-            ["action", action ?? ""],
-            ["element", element ?? ""],
-            ["duration", duration ?? ""],
-        ]));
+      const { action, options: { element, duration } } = obj;
+      const res = await httpGet('performTouch', new Map([
+        ["action", action ?? ""],
+        ["element", element ?? ""],
+        ["duration", duration ?? ""],
+      ]));
     });
   }
-  
+
   async touchLongClick(elementId) {
     const res = await httpGet('touchLongClick', new Map([["elementId", elementId ?? ""]]));
   }
-  
+
   async getText(elementId) {
     const res = await httpGet('getText', new Map([["elementId", elementId ?? ""]]));
     return res;
@@ -114,8 +124,8 @@ class AppiumPCDriver extends BaseDriver {
 
   async setValue(text, elementId) {
     if (Array.isArray(text)) {
-        // 字符串数组 -> 字符串
-        text = text.join('');
+      // 字符串数组 -> 字符串
+      text = text.join('');
     }
     const res = await httpGet('setValue', new Map([
       ["text", text ?? ""],
