@@ -268,6 +268,7 @@
 ```
 
 - `findElOrEls` @returns A single element or list of elements
+- `findElement`
 - `findElements`
 > https://appium.io/docs/en/2.0/reference/interfaces/appium_types.IFindCommands/#findelorels
 > 参数

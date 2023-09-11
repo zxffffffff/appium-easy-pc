@@ -46,7 +46,13 @@ async function httpGet(api, map_args) {
 
 class AppiumPCDriver extends BaseDriver {
 
-  locatorStrategies = ['xpath']
+  locatorStrategies = [
+    'id',
+    'xpath',
+    'name',
+    'class name',
+    'accessibility id',
+  ];
   elementCache = {}
   desiredCapConstraints = { appPath: { presence: true, isString: true } }
 
@@ -97,6 +103,10 @@ class AppiumPCDriver extends BaseDriver {
 
   async findElements(strategy, selector) {
     return await this.findElOrEls(strategy, selector, true, "");
+  }
+
+  async findElement(strategy, selector) {
+    return await this.findElOrEls(strategy, selector, false, "");
   }
 
   async click(elementId) {

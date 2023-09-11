@@ -45,4 +45,5 @@ npm install ./appium-mac2-driver
 ```py
 pip install Appium-Python-Client pytest
 pytest
+pytest -s .\test_pc_driver.py
 ```
