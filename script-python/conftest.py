@@ -1,12 +1,18 @@
+import time
 import pytest
+
+# for OCR
+import pytesseract
+from PIL import Image
+from io import BytesIO
 
 # This sample code uses the Appium python client v2
 # pip install Appium-Python-Client
 # Then you can paste this into a file and simply run with Python
-
 from appium import webdriver
 from appium.webdriver.common.appiumby import AppiumBy
 from appium.webdriver.common.touch_action import TouchAction
+from selenium.webdriver.common.keys import Keys
 
 # For W3C actions
 from selenium.webdriver.common.action_chains import ActionChains
@@ -16,6 +22,9 @@ from selenium.webdriver.common.actions.pointer_input import PointerInput
 
 
 class AppiumElement:
+    driver: webdriver.Remote = None
+    ele: webdriver.WebElement = None
+
     def __init__(self, driver, ele):
         self.driver = driver
         self.ele = ele
@@ -23,19 +32,56 @@ class AppiumElement:
     def get_attribute(self, key: str) -> str:
         return self.ele.get_attribute(key)
 
-    def click(self):
-        self.ele.click()
+    def getScreenshot(self) -> Image:
+        screenshot = self.driver.get_screenshot_as_png()
+        attr = self.get_attribute("ltrb")
+        ltrb = attr.split(',')
+        return Image.open(BytesIO(screenshot)).crop((int(ltrb[0]), int(ltrb[1]), int(ltrb[2]), int(ltrb[3])))
+
+    def click(self, x: int = None, y: int = None, count: int = 1):
+        actions = TouchAction(self.driver)
+        actions.tap(self.ele, x, y, count)
+        actions.perform()
 
     def rclick(self):
         actions = TouchAction(self.driver)
         actions.long_press(self.ele)
         actions.perform()
 
-    def input(self, text: str):
+    def input(self, text: str, click=True):
+        if (click):
+            self.click()
         self.ele.send_keys(text)
+
+    def input_backspace(self, click=False):
+        if (click):
+            self.click()
+        self.ele.send_keys(Keys.BACKSPACE)
+
+    def input_enter(self, click=False):
+        if (click):
+            self.click()
+        self.ele.send_keys(Keys.ENTER)
+
+    def input_escape(self, click=False):
+        if (click):
+            self.click()
+        self.ele.send_keys(Keys.ESCAPE)
+
+    def input_space(self, click=False):
+        if (click):
+            self.click()
+        self.ele.send_keys(Keys.SPACE)
+
+    def input_delete(self, click=False):
+        if (click):
+            self.click()
+        self.ele.send_keys(Keys.DELETE)
 
 
 class AppiumDriver:
+    driver: webdriver.Remote = None
+
     def __init__(self):
         caps = {}
         caps["appium:driverName"] = "pc"
@@ -52,13 +98,97 @@ class AppiumDriver:
     def get_page_source(self) -> str:
         return self.driver.page_source
 
-    def find_element_by_path(self, path) -> AppiumElement:
-        ele = self.driver.find_element(by=AppiumBy.XPATH, value=path)
-        return AppiumElement(self.driver, ele)
+    def getScreenshot(self) -> Image:
+        screenshot = self.driver.get_screenshot_as_png()
+        return Image.open(BytesIO(screenshot))
 
-    def find_element_by_id(self, id) -> AppiumElement:
-        ele = self.driver.find_element(by=AppiumBy.ID, value=id)
-        return AppiumElement(self.driver, ele)
+    def find_element_by_path(self, path, wait_sec: float = 3) -> AppiumElement:
+        start_time = time.time()
+        while True:
+            try:
+                ele = self.driver.find_element(by=AppiumBy.XPATH, value=path)
+                return AppiumElement(self.driver, ele)
+            except:
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= wait_sec:
+                    break
+        return None
+
+    def find_element_by_id(self, id, wait_sec: float = 3) -> AppiumElement:
+        start_time = time.time()
+        while True:
+            try:
+                ele = self.driver.find_element(by=AppiumBy.ID, value=id)
+                return AppiumElement(self.driver, ele)
+            except:
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= wait_sec:
+                    break
+        return None
+
+
+class Common:
+    def OCR(image: Image, whitelist=None) -> str:
+        """
+        需要安装 Tesseract-OCR 并添加到 PATH
+        模型路径 C:/Program Files/Tesseract-OCR/tessdata/*.traineddata
+
+        图片分割模式（PSM） tesseract有13种图片分割模式（page segmentation mode，psm）：
+        0 — Orientation and script detection (OSD) only. 方向及语言检测（Orientation and script detection，OSD)
+        1 — Automatic page segmentation with OSD. 自动图片分割
+        2 — Automatic page segmentation, but no OSD, or OCR. 自动图片分割，没有OSD和OCR
+        3 — Fully automatic page segmentation, but no OSD. (Default) 完全的自动图片分割，没有OSD
+        4 — Assume a single column of text of variable sizes. 假设有一列不同大小的文本
+        5 — Assume a single uniform block of vertically aligned text. 假设有一个垂直对齐的文本块
+        6 — Assume a single uniform block of text. 假设有一个对齐的文本块
+        7 — Treat the image as a single text line. 图片为单行文本
+        8 — Treat the image as a single word. 图片为单词
+        9 — Treat the image as a single word in a circle. 图片为圆形的单词
+        10 — Treat the image as a single character. 图片为单个字符
+        11 — Sparse text. Find as much text as possible in no particular order. 稀疏文本。查找尽可能多的文本，没有特定的顺序。
+        12 — Sparse text with OSD. OSD稀疏文本
+        13 — Raw line. Treat the image as a single text line, bypassing hacks that are Tesseract-specific. 原始行。将图像视为单个文本行。
+
+        OCR引擎模式（OEM） 有4种OCR引擎模式：
+        0 — Legacy engine only.仅旧版引擎（3.x以前）。
+        1 — Neural nets LSTM engine only.仅神经网络 LSTM 引擎
+        2 — Legacy + LSTM engines.混合模式（传统 + LSTM 引擎）
+        3 — Default, based on what is available.默认，基于可用的内容
+        """
+        # 已安装的语言包列表
+        # list = pytesseract.get_languages(config='')
+
+        # 转换成灰度图像
+        gray_image = image.convert('L')
+
+        # 字符白名单（不支持中文）
+        config = ' --oem 1 --psm 6'
+        if (whitelist != None):
+            config = config + ' -c tessedit_char_whitelist=' + whitelist
+        text = pytesseract.image_to_string(
+            gray_image, lang='chi_sim', config=config)
+        return text.replace('\n', '').replace(' ', '')
+
+    def price_to_float(price: str) -> tuple[float, float]:
+        # 移除千分位','
+        price = price.replace(',', '')
+        # 处理单位 K,M,B,T
+        unit = price[-1]
+        if unit == 'K':
+            return float(price[:-1]), 1000
+        elif unit == 'M':
+            return float(price[:-1]), 1000 * 1000
+        elif unit == 'B':
+            return float(price[:-1]), 1000 * 1000 * 1000
+        elif unit == 'T':
+            return float(price[:-1]), 1000 * 1000 * 1000 * 1000
+        elif unit == '万':
+            return float(price[:-1]), 10000
+        elif unit == '亿':
+            return float(price[:-1]), 10000 * 10000
+        elif price[-2] == '万亿':
+            return float(price[:-2]), 10000 * 10000 * 10000
+        return float(price), 1
 
 
 @pytest.fixture()

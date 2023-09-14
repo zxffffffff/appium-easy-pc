@@ -50,8 +50,6 @@ class AppiumPCDriver extends BaseDriver {
     'id',
     'xpath',
     'name',
-    'class name',
-    'accessibility id',
   ];
   elementCache = {}
   desiredCapConstraints = { appPath: { presence: true, isString: true } }
@@ -115,11 +113,14 @@ class AppiumPCDriver extends BaseDriver {
 
   async performTouch(args) {
     args.forEach(async obj => {
-      const { action, options: { element, duration } } = obj;
+      const { action, options: { element, duration, x, y, count } } = obj;
       const res = await httpGet('performTouch', new Map([
         ["action", action ?? ""],
         ["element", element ?? ""],
         ["duration", duration ?? ""],
+        ["x", x ?? ""],
+        ["y", y ?? ""],
+        ["count", count ?? ""],
       ]));
     });
   }

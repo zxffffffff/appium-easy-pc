@@ -18,6 +18,7 @@ npm install appium@next
 
 - 添加 `driver`
 ```js
+# 每次修改都需要 build
 npm install ./appium-pc-driver
 npm install ./appium-mac2-driver
 ```
@@ -42,8 +43,14 @@ npm install ./appium-mac2-driver
 # python 脚本记录
 
 ## `pytest`
-```py
-pip install Appium-Python-Client pytest
+```bash
+pip install Appium-Python-Client pytest pytesseract
 pytest
-pytest -s .\test_pc_driver.py
+pytest --capture=no     # show print statements in console
+pytest -s               # equivalent to previous command
+pytest -s ./test_pc_driver.py
 ```
+- OCR（tesseract识别率不高，尤其是是中文、数字oO0%等）
+    - https://github.com/UB-Mannheim/tesseract
+    - https://github.com/tesseract-ocr/tessdata_best
+    - https://github.com/tesseract-ocr/tessdata_fast
