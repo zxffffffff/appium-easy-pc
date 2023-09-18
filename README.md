@@ -44,13 +44,24 @@ npm install ./appium-mac2-driver
 
 ## `pytest`
 ```bash
-pip install Appium-Python-Client pytest pytesseract
+pip install Appium-Python-Client pytest
 pytest
 pytest --capture=no     # show print statements in console
 pytest -s               # equivalent to previous command
 pytest -s ./test_pc_driver.py
 ```
-- OCR（tesseract识别率不高，尤其是是中文、数字oO0%等）
+
+## Tesseract-OCR 谷歌（需要另外安装，识别率不高，尤其是是中文、数字oO0%等）
+```
+pip install paddlepaddle pytesseract
+```
     - https://github.com/UB-Mannheim/tesseract
     - https://github.com/tesseract-ocr/tessdata_best
     - https://github.com/tesseract-ocr/tessdata_fast
+
+## PaddleOCR 百度（pip安装即用，识别率高）
+```
+pip install paddlepaddle paddleocr -i https://mirror.baidu.com/pypi/simple
+```
+    - https://github.com/PaddlePaddle/PaddleOCR/blob/static/doc/doc_ch/installation.md
+    - https://www.paddlepaddle.org.cn/documentation/docs/zh/guides/index_cn.html
