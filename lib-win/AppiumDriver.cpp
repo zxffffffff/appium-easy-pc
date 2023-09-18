@@ -18,6 +18,8 @@ using namespace Gdiplus;
 #define ROOT_NAME "root"
 #define W3C_ELEMENT_KEY "element-6066-11e4-a52e-4f735466cecf"
 
+static int g_listen_port = 0;
+
 namespace
 {
     // 兼容自绘控件，模拟一个不存在的node
@@ -1666,13 +1668,16 @@ bool run()
         chrono.Stop();
         chrono.OutputDebug();
     });
-    
-    bool ok = svr.listen("0.0.0.0", 4724);
+
+    if (g_listen_port <= 0)
+        return false;
+    bool ok = svr.listen("0.0.0.0", g_listen_port);
     return ok;
 }
 
-void AppiumDriver::Run(bool thread)
+void AppiumDriver::Run(int port, bool thread)
 {
+    g_listen_port = port;
     if (thread) {
         std::thread tr(std::bind(run));
         tr.detach();
